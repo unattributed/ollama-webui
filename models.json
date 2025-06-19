@@ -1,0 +1,52 @@
+[
+  {
+    "name": "deepseek-r1",
+    "description": "DeepSeek-R1 is a family of open reasoning models with performance approaching that of leading models, such as O3 and Gemini 2.5 Pro.",
+    "updated": "2 days ago"
+  },
+  {
+    "name": "llama4",
+    "description": "Meta's latest collection of multimodal models.",
+    "updated": "2 days ago"
+  },
+  {
+    "name": "qwen3",
+    "description": "Qwen3 is the latest generation of large language models in Qwen series, offering a comprehensive suite of dense and mixture-of-experts (MoE) models.",
+    "updated": "3 weeks ago"
+  },
+  {
+    "name": "qwen2.5vl",
+    "description": "Flagship vision-language model of Qwen and also a significant leap from the previous Qwen2-VL.",
+    "updated": "3 weeks ago"
+  },
+  {
+    "name": "devstral",
+    "description": "Devstral: the best open source model for coding agents",
+    "updated": "4 weeks ago"
+  },
+  {
+    "name": "gemma3",
+    "description": "The current, most capable model that runs on a single GPU.",
+    "updated": "2 months ago"
+  },
+  {
+    "name": "phi4",
+    "description": "Phi-4 is a 14B parameter, state-of-the-art open model from Microsoft.",
+    "updated": "5 months ago"
+  },
+  {
+    "name": "llama3.1",
+    "description": "Llama 3.1 is a new state-of-the-art model from Meta available in 8B, 70B and 405B parameter sizes.",
+    "updated": "6 months ago"
+  },
+  {
+    "name": "llama3.3",
+    "description": "New state of the art 70B model. Llama 3.3 70B offers similar performance compared to the Llama 3.1 405B model.",
+    "updated": "6 months ago"
+  },
+  {
+    "name": "llama3.2",
+    "description": "Meta's Llama 3.2 goes small with 1B and 3B models.",
+    "updated": "8 months ago"
+  }
+]

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ollama Web UI</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="title">🧠 Ollama Web UI</div>
+      <div class="model-controls">
+        <label for="model-select">Choose Model:</label>
+        <select id="model-select"></select>
+        <button id="pull-model">Pull Model</button>
+      </div>
+      <div id="model-description" class="model-description"></div>
+    </header>
+
+    <main id="chat-container"></main>
+
+    <div id="upload-area">
+      <input type="file" id="file-input" multiple />
+      <label for="file-input">📎 Upload File(s)</label>
+      <div id="file-preview"></div>
+    </div>
+
+    <footer>
+      <form id="prompt-form">
+        <input
+          type="text"
+          id="prompt-input"
+          placeholder="Send a message..."
+          autocomplete="off"
+          required
+        />
+        <button type="submit" id="submit-btn">Send</button>
+      </form>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

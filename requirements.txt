@@ -1,0 +1,12 @@
+Flask==3.1.1            # Web framework for building the backend API
+requests==2.32.4        # HTTP library for making requests
+ollama==0.5.1           # Ollama Python client
+llm-axe==1.1.9          # For working with LLM-based agents and models
+pydantic==2.11.7        # For data validation (needed for working with models)
+pypdf==5.6.0            # For handling PDF uploads if used
+scikit-learn==1.7.0     # For machine learning and model-related tasks
+scipy==1.15.3           # Required by some scientific models or dependencies
+beautifulsoup4==4.13.4  # For web scraping or parsing HTML (if used)
+selenium==4.33.0        # For automating browsers, if needed for testing or interaction
+httpx==0.28.1           # For asynchronous HTTP requests
+pyyaml==6.0.2           # For working with YAML files
