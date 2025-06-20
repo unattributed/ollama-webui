@@ -20,7 +20,6 @@ tests/__pycache__
 
 # VS Code workspace files (optional)
 .vscode/
-.github/
 
 # Python VENV
 .venv/
