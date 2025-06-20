@@ -41,7 +41,7 @@ ollama-webui/
 2. Install the required dependencies:
 
    ```bash
-   pip install -r requirements.txt # future feature
+   pip install -r requirements.txt 
    ```
 
 3. Run the WebUI locally:
