@@ -1,86 +1,113 @@
----
----
-# Ollama WebUI
 
-**Ollama WebUI** is a **lightweight**, **manual query interface** that allows users to interact with **pre-trained LLMs** for security data analysis. It provides a simple, **under 1MB** front-end that enables users to upload files for analysis, offering an efficient way to process and analyze security tool outputs.
+# Ollama Web UI
 
----
+A lightweight, client-side JavaScript interface for interacting with Ollama's local model server via `localhost:11434`. Includes a model pull server powered by Flask to install and manage multiple models.
 
-## 📁 File Structure
+## Features
 
-```plaintext
-ollama-webui/
-├── favicon.ico               # The favicon for the Web UI
-├── index.html                # The main HTML file for the user interface
-├── models.json               # Contains model data and metadata used for dropdown and UI functionality
-├── script.js                 # JavaScript file for frontend logic and interactions
-├── style.css                 # CSS file for styling the user interface
-└── scripts/
-    ├── deploy_full_ollama_ui.py  # Script to deploy the entire Ollama WebUI setup
-    └── pull_model.py             # Script to launch the Ollama model server for processing
-```
+- Model selector with `:latest` tag support
+- ChatGPT-style streaming responses
+- Prompt history
+- File upload and zip preview
+- Model pull interface (`pull_model.py`)
+- Automatically detects and downloads models
 
 ---
 
 ## 🚀 Getting Started
 
-### Requirements:
+### 1. Clone the Repository
 
-* **Python 3.9+**
-* **Ollama model** (set up as per your local environment)
+```bash
+git clone https://github.com/yourusername/ollama-webui.git
+cd ollama-webui
+````
 
-### Installation:
+### 2. Set Up a Virtual Environment (Recommended)
 
-1. Clone the repository:
+We strongly recommend using a virtual environment to isolate dependencies.
 
-   ```bash
-   git clone https://github.com/unattributed/ollama-webui.git
-   cd ollama-webui
-   ```
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-2. Install the required dependencies:
+### 3. Install Python Dependencies
 
-   ```bash
-   pip install -r requirements.txt 
-   ```
+Make sure you're inside the virtual environment before running:
 
-3. Run the WebUI locally:
+```bash
+pip install -r requirements.txt
+```
 
-   ```bash
-   python3 scripts/pull_model.py
-   ```
-
-4. Open your browser at [http://127.0.0.1:11435](http://127.0.0.1:11435) to access the interface.
-
-### Running the Backend:
-
-The backend listens on **localhost:11435**. Ensure that the **Ollama model** is set up and accessible from your environment. 
+> If you encounter any missing modules, ensure you're using the correct Python version and have activated the virtual environment.
 
 ---
 
-## 🔧 Features
+## 🧠 Pulling a Model
 
-* **Lightweight Front-End**: The **Ollama WebUI** is a **lightweight** front-end (less than 1MB) that provides an easy-to-use interface for interacting with pre-trained LLMs.
+Use the Flask-based helper script to pull a model via HTTP.
 
-* **File Uploads for Analysis**: Users can **upload files** (such as text, CSV, or PDF) for analysis, allowing the platform to process and analyze the content.
+```bash
+python scripts/pull_model.py
+```
 
-* **Integration with Ollama LLMs**: The platform can utilize **any Ollama LLM** to analyze the uploaded data, making it versatile for different use cases in cybersecurity and security analysis.
+By default, this will start a local server on [http://127.0.0.1:11435](http://127.0.0.1:11435) and expose `/pull_model?model=MODEL_NAME`.
+
+Example:
+
+```bash
+curl http://127.0.0.1:11435/pull_model?model=deepseek-coder:latest
+```
 
 ---
 
-## 🤝 Contributing
+## 🌐 Using the Web UI
 
-1. Fork this repository.
-2. Create a new branch (`git checkout -b feature-name`).
-3. Commit your changes (`git commit -am 'Add new feature'`).
-4. Push to your fork (`git push origin feature-name`).
-5. Create a pull request.
+1. Start your Ollama server (if not already running):
+
+```bash
+ollama run deepseek-coder:latest
+```
+
+2. Open `index.html` in your browser.
+
+> The UI connects to `localhost:11434` to send/receive prompt data.
+
+---
+
+## 📦 Project Structure
+
+```
+ollama-webui/
+├── index.html           # Web UI (static)
+├── style.css            # UI styling
+├── script.js            # JS logic for streaming/chat
+├── models.json          # Predefined model list
+├── pull_model.py        # Flask server to trigger model pulls
+└── requirements.txt     # Python dependencies
+```
+
+---
+
+## 🔧 Development Tips
+
+* Use `source .venv/bin/activate` each time you start work
+* Run `deactivate` to leave the virtual environment
+* Update dependencies with `pip freeze > requirements.txt`
+
+---
+
+## 🛠️ Requirements
+
+* Python 3.9+
+* pip
+* Ollama installed and accessible via terminal
+* Modern browser (for full Web UI support)
 
 ---
 
 ## 📜 License
 
-This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
-
----
+MIT License
 
