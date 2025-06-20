@@ -1,5 +1,6 @@
-
 # Ollama Web UI
+
+![Verified Commits](https://img.shields.io/badge/commits-signed-blue?logo=gnupg&label=GPG%20Signed)
 
 A lightweight, client-side JavaScript interface for interacting with Ollama's local model server via `localhost:11434`. Includes a model pull server powered by Flask to install and manage multiple models.
 
@@ -95,6 +96,43 @@ ollama-webui/
 * Use `source .venv/bin/activate` each time you start work
 * Run `deactivate` to leave the virtual environment
 * Update dependencies with `pip freeze > requirements.txt`
+
+---
+
+## 📁 Git Ignore Recommendations
+
+To keep your repository clean and avoid committing CI/CD secrets or workflows unintentionally, make sure the following are in your `.gitignore`:
+
+```
+# Editor & OS temp files
+*.swp
+*.swo
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Scripts, backups, and uploads
+*.zip
+*.tar
+*.sh
+*.log
+*~
+_tmpbkup/
+
+# files for testing, and development
+scripts/__pycache__
+tests/__pycache__
+
+# VS Code workspace files (optional)
+.vscode/ #vscode is wonderful
+.github/
+
+# Python VENV
+.venv/
+```
+
+> `.github/` is ignored intentionally if you're managing CI/CD workflows locally or externally.
 
 ---
 
