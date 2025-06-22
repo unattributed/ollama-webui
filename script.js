@@ -8,8 +8,44 @@ document.addEventListener("DOMContentLoaded", () => {
   const chatOutput = document.getElementById("chat-output");
   const sendBtn = document.getElementById("send-btn");
   const promptBox = document.getElementById("user-prompt");
+  const sessionList = document.getElementById("session-list");
+  const newSessionBtn = document.getElementById("new-session");
 
-  // File drag-drop logic
+  let sessionId = localStorage.getItem("session_id") || null;
+
+  function updateSession(id) {
+    sessionId = id;
+    localStorage.setItem("session_id", id);
+    loadSessions(); // refresh sidebar
+    chatOutput.innerHTML = `<div class="llm-msg">🧾 New session started: ${id}</div>`;
+  }
+
+  function loadSessions() {
+    fetch("/sessions")
+      .then((res) => res.json())
+      .then((sessions) => {
+        sessionList.innerHTML = "";
+        sessions
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .forEach((s) => {
+            const li = document.createElement("li");
+            li.textContent = s.title;
+            li.className = s.id === sessionId ? "active" : "";
+            li.addEventListener("click", () => {
+              updateSession(s.id);
+            });
+            sessionList.appendChild(li);
+          });
+      });
+  }
+
+  newSessionBtn.addEventListener("click", () => {
+    sessionId = null;
+    localStorage.removeItem("session_id");
+    chatOutput.innerHTML = "";
+  });
+
+  // File drag/drop logic
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("dragover");
@@ -54,6 +90,10 @@ document.addEventListener("DOMContentLoaded", () => {
       valid = true;
     });
 
+    if (sessionId) {
+      formData.append("session_id", sessionId);
+    }
+
     if (valid) uploadFiles(formData);
   }
 
@@ -69,6 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await res.json();
       statusBox.textContent = result.message || "Upload complete";
+      if (result.session_id) updateSession(result.session_id);
     } catch (err) {
       statusBox.textContent = "Upload failed. Check server logs.";
       console.error(err);
@@ -79,7 +120,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 3000);
   }
 
-  // Chat logic
   sendBtn.addEventListener("click", async () => {
     const prompt = promptBox.value.trim();
-    if (!prompt) retu
+    if (!prompt) return;
+
+    chatOutput.innerHTML += `<div class="user-msg">🧠 You: ${prompt}</div>`;
+    promptBox.value = "";
+
+    const body = {
+      question: prompt,
+    };
+    if (sessionId) body.session_id = sessionId;
+
+    try {
+      const res = await fetch("/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (data.session_id) updateSession(data.session_id);
+      chatOutput.innerHTML += `<div class="llm-msg">🤖 Ollama: ${data.answer}</div>`;
+    } catch (e) {
+      chatOutput.innerHTML += `<div class="llm-msg">❌ Error contacting LLM.</div>`;
+    }
+
+    chatOutput.scrollTop = chatOutput.scrollHeight;
+  });
+
+  // Initial load
+  loadSessions();
+});
