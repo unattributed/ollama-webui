@@ -34,7 +34,7 @@ def find_relevant_chunks(query_embedding, embedded_chunks, top_k=5):
     )
     return ranked[:top_k]
 
-def ask_llm(query, context_chunks):
+def stream_llm(query, context_chunks):
     context = "\n\n".join(chunk["text"] for chunk in context_chunks)
     prompt = f"""Answer the question using the context below.
 
@@ -45,34 +45,36 @@ Question: {query}
 """
 
     try:
-        res = requests.post(OLLAMA_CHAT_URL, json={
+        with requests.post(OLLAMA_CHAT_URL, json={
             "model": LLM_MODEL,
             "messages": [{"role": "user", "content": prompt}],
-            "stream": False
-        })
-        res.raise_for_status()
-        return res.json()["message"]["content"]
+            "stream": True
+        }, stream=True) as res:
+            res.raise_for_status()
+            for line in res.iter_lines():
+                if line:
+                    yield line.decode("utf-8")
     except Exception as e:
-        print(f"[ERROR] Chat failed: {e}")
-        return "[ERROR] Could not retrieve response."
+        yield "[ERROR] Streaming failed: " + str(e)
 
-def query_pipeline(question, session_id):
+def query_pipeline(question, session_id, stream=False):
     print(f"\n[+] User query: {question}")
     data = db.load_embeddings(session_id)
     if not data:
-        return "[ERROR] No embeddings loaded for this session."
+        return ["[ERROR] No embeddings loaded for this session."]
 
     q_emb = embed_query(question)
     if not q_emb:
-        return "[ERROR] Failed to embed question."
+        return ["[ERROR] Failed to embed question."]
 
     top_chunks = find_relevant_chunks(q_emb, data)
-    return ask_llm(question, top_chunks)
+    return stream_llm(question, top_chunks) if stream else ["".join(stream_llm(question, top_chunks))]
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 3:
         print("Usage: python scripts/query_handler.py '<question>' <session_id>")
         sys.exit(1)
-    response = query_pipeline(sys.argv[1], sys.argv[2])
-    print("\n[💬 Answer]\n", response)
+
+    for chunk in query_pipeline(sys.argv[1], sys.argv[2], stream=True):
+        print(chunk, end="", flush=True)
