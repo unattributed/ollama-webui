@@ -1,32 +1,35 @@
-<!-- /opt/ollama-webui/index.html -->
+<!-- ~/workspace/ollama-webui/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Ollama Web UI</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div class="sidebar">
+    <h2>Sessions</h2>
+    <ul id="session-list"></ul>
+    <button id="new-session">+ New Session</button>
+  </div>
+
   <div class="container">
     <h1>Ollama Web UI</h1>
 
-    <!-- File Upload UI -->
     <div id="drop-zone" class="drop-zone">
-      <p>Drag & drop files here or click to upload (.txt, .pdf, .zip)</p>
+      <p>Drag & drop files or click to upload (.txt, .pdf, .zip, .md)</p>
       <input type="file" id="file-input" multiple />
     </div>
 
     <ul id="file-list"></ul>
     <div id="upload-status" class="status hidden">Uploading...</div>
 
-    <!-- Prompt Input -->
     <div class="chat-box">
       <textarea id="user-prompt" placeholder="Ask something..."></textarea>
       <button id="send-btn">Send</button>
     </div>
 
-    <!-- Chat Output -->
     <div id="chat-output" class="chat-output"></div>
   </div>
 
