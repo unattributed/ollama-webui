@@ -8,8 +8,8 @@ A lightweight, client-side JavaScript interface for interacting with Ollama's lo
 
 - Model selector with `:latest` tag support
 - ChatGPT-style streaming responses
-- Prompt history
-- File upload and zip preview
+- (todo) Prompt history
+- (todo) File upload and zip preview
 - Model pull interface (`pull_model.py`)
 - Automatically detects and downloads models
 
