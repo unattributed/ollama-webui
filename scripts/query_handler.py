@@ -1,20 +1,22 @@
 # ~/workspace/ollama-webui/scripts/query_handler.py
+import os
 import json
 import math
 import requests
 
-EMBEDDINGS_FILE = "embeddings.json"
+EMBEDDINGS_DIR = "embeddings"
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 EMBED_MODEL = "nomic-embed-text"
-LLM_MODEL = "deepseek-coder:6.7b"  # or any model installed
+LLM_MODEL = "deepseek-coder:6.7b"
 
-def load_embeddings():
+def load_embeddings(session_id):
+    path = os.path.join(EMBEDDINGS_DIR, f"{session_id}.json")
     try:
-        with open(EMBEDDINGS_FILE, "r") as f:
+        with open(path, "r") as f:
             return json.load(f)
     except Exception as e:
-        print(f"[ERROR] Cannot load embeddings: {e}")
+        print(f"[ERROR] Cannot load embeddings for {session_id}: {e}")
         return []
 
 def embed_query(text):
@@ -65,11 +67,11 @@ Question: {query}
         print(f"[ERROR] Chat failed: {e}")
         return "[ERROR] Could not retrieve response."
 
-def query_pipeline(question):
+def query_pipeline(question, session_id):
     print(f"\n[+] User query: {question}")
-    data = load_embeddings()
+    data = load_embeddings(session_id)
     if not data:
-        return "[ERROR] No embeddings loaded."
+        return "[ERROR] No embeddings loaded for this session."
 
     q_emb = embed_query(question)
     if not q_emb:
@@ -79,6 +81,9 @@ def query_pipeline(question):
     return ask_llm(question, top_chunks)
 
 if __name__ == "__main__":
-    user_input = input("Ask a question: ")
-    answer = query_pipeline(user_input)
-    print("\n[💬 Answer]\n", answer)
+    import sys
+    if len(sys.argv) < 3:
+        print("Usage: python scripts/query_handler.py '<question>' <session_id>")
+        sys.exit(1)
+    response = query_pipeline(sys.argv[1], sys.argv[2])
+    print("\n[💬 Answer]\n", response)
