@@ -1,17 +1,16 @@
 # ~/workspace/ollama-webui/scripts/embedder.py
 import os
-import json
 import sys
 import requests
 from scripts import parser
+from scripts import db
 from scripts.session_manager import session_exists
 
 UPLOAD_DIR = "upload"
-EMBEDDINGS_DIR = "embeddings"
 CHUNK_SIZE = 500
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
 
-os.makedirs(EMBEDDINGS_DIR, exist_ok=True)
+db.init_db()
 
 def chunk_text(text, chunk_size=CHUNK_SIZE):
     words = text.split()
@@ -36,11 +35,10 @@ def generate_embedding(text_chunk):
 def embed_all_files(session_id):
     if not session_exists(session_id):
         print(f"[ERROR] Session {session_id} does not exist.")
-        return []
+        return
 
     session_dir = os.path.join(UPLOAD_DIR, session_id)
-    output_file = os.path.join(EMBEDDINGS_DIR, f"{session_id}.json")
-    results = []
+    count = 0
 
     for filename in os.listdir(session_dir):
         filepath = os.path.join(session_dir, filename)
@@ -55,13 +53,10 @@ def embed_all_files(session_id):
         for chunk in chunk_text(text):
             embedding = generate_embedding(chunk)
             if embedding:
-                results.append({"text": chunk, "embedding": embedding})
+                db.insert_embedding(session_id, chunk, embedding)
+                count += 1
 
-    with open(output_file, "w") as f:
-        json.dump(results, f, indent=2)
-
-    print(f"✅ Embedded {len(results)} chunks into {output_file}")
-    return results
+    print(f"✅ Embedded {count} chunks into SQLite for session {session_id}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
