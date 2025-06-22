@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
     chatOutput.innerHTML = "";
   });
 
-  // File drag/drop logic
+  // Drag & drop file handling
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("dragover");
@@ -127,8 +127,14 @@ document.addEventListener("DOMContentLoaded", () => {
     chatOutput.innerHTML += `<div class="user-msg">🧠 You: ${prompt}</div>`;
     promptBox.value = "";
 
+    const outputDiv = document.createElement("div");
+    outputDiv.className = "llm-msg";
+    outputDiv.innerHTML = "🤖 Ollama: ";
+    chatOutput.appendChild(outputDiv);
+
     const body = {
       question: prompt,
+      stream: true,
     };
     if (sessionId) body.session_id = sessionId;
 
@@ -139,16 +145,27 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
-      if (data.session_id) updateSession(data.session_id);
-      chatOutput.innerHTML += `<div class="llm-msg">🤖 Ollama: ${data.answer}</div>`;
+      if (!res.body || !res.ok) {
+        outputDiv.innerHTML += "[Error: Unable to stream response]";
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        outputDiv.innerHTML += chunk;
+      }
     } catch (e) {
-      chatOutput.innerHTML += `<div class="llm-msg">❌ Error contacting LLM.</div>`;
+      outputDiv.innerHTML += "[Error: Chat failed]";
     }
 
     chatOutput.scrollTop = chatOutput.scrollHeight;
   });
 
-  // Initial load
+  // Initial session list load
   loadSessions();
 });
