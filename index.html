@@ -1,44 +1,33 @@
+<!-- /opt/ollama-webui/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ollama Web UI</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="app">
-    <header>
-      <div class="title">🧠 Ollama Web UI</div>
-      <div class="model-controls">
-        <label for="model-select">Choose Model:</label>
-        <select id="model-select"></select>
-        <button id="pull-model">Pull Model</button>
-      </div>
-      <div id="model-description" class="model-description"></div>
-    </header>
+  <div class="container">
+    <h1>Ollama Web UI</h1>
 
-    <main id="chat-container"></main>
-
-    <div id="upload-area">
+    <!-- File Upload UI -->
+    <div id="drop-zone" class="drop-zone">
+      <p>Drag & drop files here or click to upload (.txt, .pdf, .zip)</p>
       <input type="file" id="file-input" multiple />
-      <label for="file-input">📎 Upload File(s)</label>
-      <div id="file-preview"></div>
     </div>
 
-    <footer>
-      <form id="prompt-form">
-        <input
-          type="text"
-          id="prompt-input"
-          placeholder="Send a message..."
-          autocomplete="off"
-          required
-        />
-        <button type="submit" id="submit-btn">Send</button>
-      </form>
-    </footer>
+    <ul id="file-list"></ul>
+    <div id="upload-status" class="status hidden">Uploading...</div>
+
+    <!-- Prompt Input -->
+    <div class="chat-box">
+      <textarea id="user-prompt" placeholder="Ask something..."></textarea>
+      <button id="send-btn">Send</button>
+    </div>
+
+    <!-- Chat Output -->
+    <div id="chat-output" class="chat-output"></div>
   </div>
 
   <script src="script.js"></script>
