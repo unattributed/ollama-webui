@@ -1,12 +1,15 @@
-// /opt/ollama-webui/script.js
+// ~/workspace/ollama-webui/script.js
 
 document.addEventListener("DOMContentLoaded", () => {
   const dropZone = document.getElementById("drop-zone");
   const fileInput = document.getElementById("file-input");
   const fileList = document.getElementById("file-list");
   const statusBox = document.getElementById("upload-status");
+  const chatOutput = document.getElementById("chat-output");
+  const sendBtn = document.getElementById("send-btn");
+  const promptBox = document.getElementById("user-prompt");
 
-  // Handle drag events
+  // File drag-drop logic
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("dragover");
@@ -36,7 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let valid = false;
 
     Array.from(files).forEach((file) => {
-      if (!/\.(txt|pdf|zip)$/i.test(file.name)) {
+      if (!/\.(txt|pdf|zip|md)$/i.test(file.name)) {
         const li = document.createElement("li");
         li.textContent = `❌ Skipped: ${file.name}`;
         li.style.color = "red";
@@ -75,4 +78,8 @@ document.addEventListener("DOMContentLoaded", () => {
       statusBox.classList.add("hidden");
     }, 3000);
   }
-});
+
+  // Chat logic
+  sendBtn.addEventListener("click", async () => {
+    const prompt = promptBox.value.trim();
+    if (!prompt) retu
