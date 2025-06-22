@@ -1,23 +1,12 @@
 # ~/workspace/ollama-webui/scripts/query_handler.py
-import os
-import json
 import math
 import requests
+from scripts import db
 
-EMBEDDINGS_DIR = "embeddings"
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 EMBED_MODEL = "nomic-embed-text"
 LLM_MODEL = "deepseek-coder:6.7b"
-
-def load_embeddings(session_id):
-    path = os.path.join(EMBEDDINGS_DIR, f"{session_id}.json")
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"[ERROR] Cannot load embeddings for {session_id}: {e}")
-        return []
 
 def embed_query(text):
     try:
@@ -69,7 +58,7 @@ Question: {query}
 
 def query_pipeline(question, session_id):
     print(f"\n[+] User query: {question}")
-    data = load_embeddings(session_id)
+    data = db.load_embeddings(session_id)
     if not data:
         return "[ERROR] No embeddings loaded for this session."
 
