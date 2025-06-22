@@ -1,128 +1,78 @@
-// script.js (Streaming pull logs + chat UI)
-const chatContainer = document.getElementById('chat-container');
-const promptForm = document.getElementById('prompt-form');
-const promptInput = document.getElementById('prompt-input');
-const modelSelect = document.getElementById('model-select');
-const fileInput = document.getElementById('file-input');
-const filePreview = document.getElementById('file-preview');
-const pullModelButton = document.getElementById('pull-model');
-const modelDescription = document.getElementById('model-description');
+// /opt/ollama-webui/script.js
 
-let currentModel = 'deepseek-r1';
-let modelsMap = {};
+document.addEventListener("DOMContentLoaded", () => {
+  const dropZone = document.getElementById("drop-zone");
+  const fileInput = document.getElementById("file-input");
+  const fileList = document.getElementById("file-list");
+  const statusBox = document.getElementById("upload-status");
 
-// 🧹 Strip ANSI control sequences for clean display
-function stripAnsiCodes(str) {
-  return str.replace(
-    /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
-    ''
-  );
-}
-
-function appendMessage(role, text) {
-  const div = document.createElement('div');
-  div.className = 'message ' + role;
-  div.textContent = text;
-  chatContainer.appendChild(div);
-  chatContainer.scrollTop = chatContainer.scrollHeight;
-}
-
-function updateModelDescription(modelName) {
-  const model = modelsMap[modelName];
-  if (model) {
-    modelDescription.innerHTML = `
-      <strong>Description:</strong> ${model.description}<br>
-      <strong>Updated:</strong> ${model.updated}
-    `;
-  } else {
-    modelDescription.innerHTML = '';
-  }
-}
-
-async function fetchModels() {
-  const res = await fetch('models.json');
-  const models = await res.json();
-  modelSelect.innerHTML = '';
-  models.forEach(model => {
-    const opt = document.createElement('option');
-    opt.value = model.name;
-    opt.textContent = model.name;
-    if (model.name === currentModel) opt.selected = true;
-    modelSelect.appendChild(opt);
-    modelsMap[model.name] = model;
-  });
-  updateModelDescription(modelSelect.value);
-}
-
-pullModelButton.addEventListener('click', () => {
-  const model = modelSelect.value;
-  promptInput.placeholder = 'Pulling and loading model...';
-  const statusMsg = document.createElement('div');
-  statusMsg.className = 'message status';
-  statusMsg.textContent = `🔄 Starting ollama run ${model}...`;
-  chatContainer.appendChild(statusMsg);
-  chatContainer.scrollTop = chatContainer.scrollHeight;
-
-  const evtSource = new EventSource(`http://localhost:11435/pull_model?model=${model}`);
-  evtSource.onmessage = function (e) {
-    const line = stripAnsiCodes(e.data);
-    statusMsg.textContent += '\n' + line;
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-    if (line.toLowerCase().includes('success')) {
-      promptInput.placeholder = 'Ready to Use';
-    }
-  };
-  evtSource.onerror = function () {
-    statusMsg.textContent += '\n❌ Connection closed.';
-    evtSource.close();
-  };
-});
-
-promptForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const prompt = promptInput.value.trim();
-  if (!prompt) return;
-  appendMessage('user', prompt);
-  promptInput.value = '';
-  appendMessage('ai', '...thinking...');
-
-  const res = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: modelSelect.value, prompt, stream: true })
+  // Handle drag events
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
   });
 
-  const reader = res.body.getReader();
-  let buffer = '', fullText = '';
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("dragover");
+  });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += new TextDecoder().decode(value);
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line);
-        fullText += data.response;
-      } catch {}
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+    handleFiles(e.dataTransfer.files);
+  });
+
+  dropZone.addEventListener("click", () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", () => {
+    handleFiles(fileInput.files);
+  });
+
+  function handleFiles(files) {
+    fileList.innerHTML = "";
+    const formData = new FormData();
+    let valid = false;
+
+    Array.from(files).forEach((file) => {
+      if (!/\.(txt|pdf|zip)$/i.test(file.name)) {
+        const li = document.createElement("li");
+        li.textContent = `❌ Skipped: ${file.name}`;
+        li.style.color = "red";
+        fileList.appendChild(li);
+        return;
+      }
+
+      formData.append("files", file);
+      const li = document.createElement("li");
+      li.textContent = `✅ Queued: ${file.name}`;
+      fileList.appendChild(li);
+      valid = true;
+    });
+
+    if (valid) uploadFiles(formData);
+  }
+
+  async function uploadFiles(formData) {
+    statusBox.classList.remove("hidden");
+    statusBox.textContent = "Uploading...";
+
+    try {
+      const res = await fetch("/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      statusBox.textContent = result.message || "Upload complete";
+    } catch (err) {
+      statusBox.textContent = "Upload failed. Check server logs.";
+      console.error(err);
     }
-  }
-  const last = chatContainer.querySelector('.message.ai:last-child');
-  if (last) last.remove();
-  appendMessage('ai', fullText);
-});
 
-fileInput.addEventListener('change', () => {
-  filePreview.textContent = '';
-  for (const file of fileInput.files) {
-    filePreview.textContent += `📄 ${file.name}\n`;
+    setTimeout(() => {
+      statusBox.classList.add("hidden");
+    }, 3000);
   }
 });
-
-modelSelect.addEventListener('change', () => {
-  updateModelDescription(modelSelect.value);
-});
-
-window.addEventListener('DOMContentLoaded', fetchModels);
