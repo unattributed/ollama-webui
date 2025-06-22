@@ -3,6 +3,7 @@ import os
 import zipfile
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
+from scripts.query_handler import query_pipeline
 
 UPLOAD_FOLDER = 'upload'
 ALLOWED_EXTENSIONS = {'.txt', '.pdf', '.md', '.zip'}
@@ -51,5 +52,6 @@ def upload():
 
     return jsonify({"message": f"Uploaded {len(saved)} file(s)", "details": saved})
 
-if __name__ == '__main__':
-    app.run(debug=True, port=11435)
+
+@app.route("/query", methods=["POST"])
+def handle_query():
