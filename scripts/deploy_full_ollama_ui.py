@@ -69,10 +69,11 @@ form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 }
 
 SCRIPT_CONTENTS = {
-    "pull_model.py": """# pull_model.py placeholder content\nfrom flask import Flask\napp = Flask(__name__)\n@app.route('/')\ndef hello():\n    return 'Hello from Ollama Pull Server'\nif __name__ == '__main__':\n    app.run(host='127.0.0.1', port=11435)\n"""
+    "pull_model.py": """# pull_model.py placeholder content\nfrom flask import Flask\napp = Flask(__name__)\n@app.route('/')\ndef hello():\n    # Placeholder status endpoint used by generated sample deployments.\n    return 'Hello from Ollama Pull Server'\nif __name__ == '__main__':\n    app.run(host='127.0.0.1', port=11435)\n"""
 }
 
 def write_file(path, content, dry_run=False, verbose=False, binary=False):
+    """Write one generated asset/script file, honoring dry-run and verbosity flags."""
     if dry_run:
         print(f"[dry-run] Would write {path}")
         return
@@ -84,6 +85,11 @@ def write_file(path, content, dry_run=False, verbose=False, binary=False):
             print(f"Wrote file: {path}")
 
 def install_webui(dry_run=False, verbose=False):
+    """
+    Materialize a full standalone web UI tree under ~/ollama-webui.
+
+    Useful for sysadmins who want repeatable local installs without manual file copying.
+    """
     os.makedirs(WEBUI_DIR, exist_ok=True)
     os.makedirs(TARGET_SCRIPTS_DIR, exist_ok=True)
 
@@ -92,6 +98,7 @@ def install_webui(dry_run=False, verbose=False):
         if content is not None:
             write_file(path, content, dry_run, verbose)
         else:
+            # Binary assets (favicon) are copied from scripts/ when present.
             src = os.path.join(SCRIPTS_DIR, filename)
             dst = path
             if os.path.exists(src):
@@ -107,6 +114,11 @@ def install_webui(dry_run=False, verbose=False):
         print(f"\n✅ Ollama Web UI installed at: {WEBUI_DIR}")
 
 def uninstall_webui(dry_run=False, verbose=False):
+    """
+    Remove the installed ~/ollama-webui tree.
+
+    This is intentionally destructive; use --dry-run first in automation pipelines.
+    """
     if os.path.exists(WEBUI_DIR):
         if dry_run:
             print(f"[dry-run] Would delete {WEBUI_DIR}")
@@ -118,6 +130,7 @@ def uninstall_webui(dry_run=False, verbose=False):
         print("Nothing to uninstall: directory does not exist.")
 
 def main():
+    """Parse CLI flags and dispatch to install/uninstall workflows."""
     parser = argparse.ArgumentParser(description="Deploy or remove the Ollama Web UI.")
     parser.add_argument("--install", action="store_true", help="Install the Web UI")
     parser.add_argument("--uninstall", action="store_true", help="Uninstall the Web UI")

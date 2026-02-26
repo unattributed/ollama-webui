@@ -12,20 +12,31 @@ CORS(app)
 
 @app.route('/')
 def serve_index():
+    """Serve the static UI entrypoint from the repository root."""
     return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/<path:path>')
 def serve_static(path):
+    """Serve static assets (JS/CSS/models.json/favicon) for the frontend."""
     return send_from_directory(app.static_folder, path)
 
 @app.route('/pull_model', methods=['GET'])
 def pull_model():
+    """
+    Start an Ollama model run and stream stdout back to the browser via SSE.
+
+    Operational note: each request spawns a subprocess (`ollama run <model>`),
+    so this endpoint should remain localhost-bound unless protected by a proxy.
+    """
     model = request.args.get('model')
     if not model:
         return 'Missing model parameter', 400
 
     def stream_output():
+        """Yield line-by-line subprocess output as Server-Sent Events."""
         try:
+            # Stream combined stdout/stderr so operators can diagnose pull/load failures
+            # directly from the browser without shell access to this host.
             process = subprocess.Popen(
                 ['ollama', 'run', model],
                 stdout=subprocess.PIPE,
@@ -43,5 +54,6 @@ def pull_model():
     return Response(stream_output(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
+    # Bind to loopback only; this helper is intended for local admin workflows.
     print('Starting Ollama pull model server on http://127.0.0.1:11435 ...')
     app.run(host='127.0.0.1', port=11435, threaded=True)
