@@ -5,7 +5,7 @@ A lightweight local Web UI for chatting with models served by Ollama. The Python
 ## Features
 
 - Local browser UI for Ollama models
-- Model selector from Ollama's public model library, with `models.json` as a fallback
+- Newest-first model selector from Ollama's public model library, with `models.json` as a fallback
 - Local installed model detection through Ollama `/api/tags`
 - Streaming prompt responses through Ollama `/api/generate`
 - Streaming model downloads through Ollama `/api/pull`

@@ -164,7 +164,11 @@ def load_bundled_model_catalog() -> list[dict[str, Any]]:
 
 def fetch_ollama_library_catalog() -> list[dict[str, Any]]:
     """Fetch and parse the current public Ollama model library."""
-    response = requests.get(OLLAMA_LIBRARY_URL, timeout=CATALOG_REQUEST_TIMEOUT_SECONDS)
+    response = requests.get(
+        OLLAMA_LIBRARY_URL,
+        params={"sort": "newest"},
+        timeout=CATALOG_REQUEST_TIMEOUT_SECONDS,
+    )
     response.raise_for_status()
 
     parser = OllamaLibraryParser()
