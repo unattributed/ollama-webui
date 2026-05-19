@@ -34,6 +34,7 @@ MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PULL_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 catalog_cache: dict[str, Any] = {"expires_at": 0.0, "models": []}
 active_pulls: dict[str, requests.Response] = {}
+cancelled_pulls: set[str] = set()
 active_pulls_lock = Lock()
 
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
@@ -222,18 +223,27 @@ def unregister_active_pull(pull_id: str) -> None:
     """Stop tracking an Ollama pull stream."""
     with active_pulls_lock:
         active_pulls.pop(pull_id, None)
+        cancelled_pulls.discard(pull_id)
 
 
 def close_active_pull(pull_id: str) -> bool:
     """Close an active Ollama pull stream if one exists."""
     with active_pulls_lock:
         upstream = active_pulls.pop(pull_id, None)
+        if upstream is not None:
+            cancelled_pulls.add(pull_id)
 
     if upstream is None:
         return False
 
     upstream.close()
     return True
+
+
+def is_pull_cancelled(pull_id: str) -> bool:
+    """Return True when a pull stream was intentionally cancelled."""
+    with active_pulls_lock:
+        return pull_id in cancelled_pulls
 
 
 def proxy_ollama_json(path: str) -> tuple[dict[str, Any], int]:
@@ -385,8 +395,9 @@ def pull_model() -> Response | tuple[Response, int]:
                         yield sse_line(status)
 
             yield sse_line("success: model pull completed")
-        except requests.RequestException as exc:
-            yield sse_line(f"pull interrupted: {exc}")
+        except Exception as exc:
+            if not is_pull_cancelled(pull_id):
+                yield sse_line(f"pull interrupted: {exc}")
         finally:
             unregister_active_pull(pull_id)
             upstream.close()
