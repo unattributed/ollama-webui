@@ -1,25 +1,25 @@
-# Editor & OS temp files
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor and OS temporary files
 *.swp
 *.swo
 *.bak
 *.tmp
+*~
 .DS_Store
 Thumbs.db
-
-# Scripts, backups, and uploads
-*.zip
-*.tar
-*.sh
-*.log
-*~
-_tmpbkup/
-
-# files for testing, and development
-scripts/__pycache__
-tests/__pycache__
-
-# VS Code workspace files (optional)
 .vscode/
 
-# Python VENV
-.venv/
+# Local logs, smoke-test output, and packaged archives
+*.log
+smoke-test-*.txt
+*.zip
+*.tar
+*.tar.gz
+_tmpbkup/

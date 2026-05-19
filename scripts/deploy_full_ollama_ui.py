@@ -1,136 +1,132 @@
-# scripts/deploy_full_ollama_ui.py
-
+#!/usr/bin/env python3
 """
-Ollama Web UI Deployment Script (Self-contained)
+Install or remove the Ollama Web UI from a local project checkout.
 
-Usage:
--------
-# Install Web UI (creates full ~/ollama-webui tree)
-python3 scripts/deploy_full_ollama_ui.py --install --verbose
-
-# Uninstall the Web UI
-python3 scripts/deploy_full_ollama_ui.py --uninstall --verbose
-
-# Dry-run mode to preview actions
-python3 scripts/deploy_full_ollama_ui.py --install --dry-run
+The installer copies the real project files instead of embedding stale placeholder
+copies. It deliberately excludes Git metadata, virtual environments, caches,
+logs, and packaged archives.
 """
 
-import os
-import shutil
+from __future__ import annotations
+
 import argparse
+import shutil
+from pathlib import Path
 
-HOME_DIR = os.path.expanduser("~")
-WEBUI_DIR = os.path.join(HOME_DIR, "ollama-webui")
-SCRIPTS_DIR = os.path.abspath(os.path.dirname(__file__))
-TARGET_SCRIPTS_DIR = os.path.join(WEBUI_DIR, "scripts")
-
-ASSET_CONTENTS = {
-    "index.html": """<!DOCTYPE html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"UTF-8\">
-  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">
-  <title>Ollama Web UI</title>
-  <link rel=\"stylesheet\" href=\"style.css\">
-  <link rel=\"icon\" type=\"image/x-icon\" href=\"favicon.ico\">
-</head>
-<body>
-  <div id=\"chat-container\"></div>
-  <form id=\"prompt-form\">
-    <select id=\"model-select\"></select>
-    <button type=\"button\" id=\"pull-model\">Pull Model</button>
-    <input type=\"text\" id=\"prompt-input\" placeholder=\"Send a message...\">
-    <input type=\"file\" id=\"file-input\" multiple>
-    <pre id=\"file-preview\"></pre>
-  </form>
-  <div id=\"model-description\"></div>
-  <script src=\"script.js\"></script>
-</body>
-</html>
-""",
-    "style.css": """body { font-family: sans-serif; background: #111; color: #eee; padding: 2rem; }
-#chat-container { height: 400px; overflow-y: auto; border: 1px solid #444; padding: 1rem; margin-bottom: 1rem; white-space: pre-wrap; }
-.message { margin-bottom: 0.5rem; }
-.message.user { color: #8cf; }
-.message.ai { color: #c8f; }
-.message.status { color: #ccc; font-style: italic; }
-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-#prompt-input { flex: 1; }
-#file-preview { font-size: 0.8em; color: #999; }
-""",
-    "script.js": """// (see previous message for full cleaned script.js contents)
-""",
-    "models.json": """[
-  {\"name\": \"deepseek-r1\", \"description\": \"Open-source coding assistant model\", \"updated\": \"2025-06-01\" },
-  {\"name\": \"llama3\", \"description\": \"Meta AI's general-purpose LLM\", \"updated\": \"2025-05-15\" }
-]
-""",
-    "favicon.ico": None  # favicon.ico must still be copied externally (binary)
+DEFAULT_SOURCE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_TARGET_DIR = Path.home() / "ollama-webui"
+EXCLUDED_NAMES = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+}
+EXCLUDED_SUFFIXES = {
+    ".bak",
+    ".log",
+    ".pyc",
+    ".pyo",
+    ".tar",
+    ".gz",
+    ".zip",
 }
 
-SCRIPT_CONTENTS = {
-    "pull_model.py": """# pull_model.py placeholder content\nfrom flask import Flask\napp = Flask(__name__)\n@app.route('/')\ndef hello():\n    return 'Hello from Ollama Pull Server'\nif __name__ == '__main__':\n    app.run(host='127.0.0.1', port=11435)\n"""
-}
 
-def write_file(path, content, dry_run=False, verbose=False, binary=False):
+def should_exclude(path: Path) -> bool:
+    """Return True when a path should not be copied into the install tree."""
+    if any(part in EXCLUDED_NAMES for part in path.parts):
+        return True
+
+    if path.name.endswith("~"):
+        return True
+
+    return any(path.name.endswith(suffix) for suffix in EXCLUDED_SUFFIXES)
+
+
+def copy_project(source_dir: Path, target_dir: Path, dry_run: bool, verbose: bool) -> None:
+    """Copy project files from source_dir to target_dir."""
+    source_dir = source_dir.resolve()
+    target_dir = target_dir.expanduser().resolve()
+
+    if not source_dir.is_dir():
+        raise SystemExit(f"source directory does not exist: {source_dir}")
+
+    required_files = ["index.html", "style.css", "script.js", "models.json", "requirements.txt"]
+    missing_files = [name for name in required_files if not (source_dir / name).is_file()]
+    if missing_files:
+        raise SystemExit(f"source directory is missing required files: {', '.join(missing_files)}")
+
     if dry_run:
-        print(f"[dry-run] Would write {path}")
-        return
-    mode = 'wb' if binary else 'w'
-    with open(path, mode) as f:
-        if not binary:
-            f.write(content)
-        if verbose:
-            print(f"Wrote file: {path}")
-
-def install_webui(dry_run=False, verbose=False):
-    os.makedirs(WEBUI_DIR, exist_ok=True)
-    os.makedirs(TARGET_SCRIPTS_DIR, exist_ok=True)
-
-    for filename, content in ASSET_CONTENTS.items():
-        path = os.path.join(WEBUI_DIR, filename)
-        if content is not None:
-            write_file(path, content, dry_run, verbose)
-        else:
-            src = os.path.join(SCRIPTS_DIR, filename)
-            dst = path
-            if os.path.exists(src):
-                shutil.copy2(src, dst)
-                if verbose:
-                    print(f"Copied favicon.ico -> {dst}")
-
-    for filename, content in SCRIPT_CONTENTS.items():
-        path = os.path.join(TARGET_SCRIPTS_DIR, filename)
-        write_file(path, content, dry_run, verbose)
-
-    if not dry_run:
-        print(f"\n✅ Ollama Web UI installed at: {WEBUI_DIR}")
-
-def uninstall_webui(dry_run=False, verbose=False):
-    if os.path.exists(WEBUI_DIR):
-        if dry_run:
-            print(f"[dry-run] Would delete {WEBUI_DIR}")
-        else:
-            shutil.rmtree(WEBUI_DIR)
-            if verbose:
-                print(f"Deleted: {WEBUI_DIR}")
+        print(f"[dry-run] would install from {source_dir} to {target_dir}")
     else:
-        print("Nothing to uninstall: directory does not exist.")
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-def main():
-    parser = argparse.ArgumentParser(description="Deploy or remove the Ollama Web UI.")
-    parser.add_argument("--install", action="store_true", help="Install the Web UI")
-    parser.add_argument("--uninstall", action="store_true", help="Uninstall the Web UI")
-    parser.add_argument("--dry-run", action="store_true", help="Preview actions without executing")
-    parser.add_argument("--verbose", action="store_true", help="Show detailed output")
-    args = parser.parse_args()
+    for source_path in sorted(source_dir.rglob("*")):
+        relative_path = source_path.relative_to(source_dir)
+        if should_exclude(relative_path):
+            continue
+
+        target_path = target_dir / relative_path
+        if source_path.is_dir():
+            if dry_run:
+                if verbose:
+                    print(f"[dry-run] would create directory {target_path}")
+            else:
+                target_path.mkdir(parents=True, exist_ok=True)
+            continue
+
+        if source_path.is_file():
+            if dry_run:
+                print(f"[dry-run] would copy {relative_path}")
+            else:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_path, target_path)
+                if verbose:
+                    print(f"copied {relative_path}")
+
+    print(f"installed Ollama Web UI at: {target_dir}" if not dry_run else "dry run complete")
+
+
+def remove_project(target_dir: Path, dry_run: bool) -> None:
+    """Remove the installed project directory."""
+    target_dir = target_dir.expanduser().resolve()
+
+    if not target_dir.exists():
+        print(f"nothing to remove: {target_dir}")
+        return
+
+    if dry_run:
+        print(f"[dry-run] would remove {target_dir}")
+        return
+
+    shutil.rmtree(target_dir)
+    print(f"removed Ollama Web UI from: {target_dir}")
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Install or remove the Ollama Web UI.")
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--install", action="store_true", help="Install the Web UI")
+    action.add_argument("--uninstall", action="store_true", help="Uninstall the Web UI")
+    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE_DIR, help="Project source directory")
+    parser.add_argument("--target", type=Path, default=DEFAULT_TARGET_DIR, help="Install target directory")
+    parser.add_argument("--dry-run", action="store_true", help="Preview actions without changing files")
+    parser.add_argument("--verbose", action="store_true", help="Show copied files")
+    return parser.parse_args()
+
+
+def main() -> None:
+    """Run the installer or uninstaller."""
+    args = parse_args()
 
     if args.install:
-        install_webui(dry_run=args.dry_run, verbose=args.verbose)
+        copy_project(args.source, args.target, args.dry_run, args.verbose)
     elif args.uninstall:
-        uninstall_webui(dry_run=args.dry_run, verbose=args.verbose)
-    else:
-        parser.print_help()
+        remove_project(args.target, args.dry_run)
+
 
 if __name__ == "__main__":
     main()

@@ -16,9 +16,10 @@ body {
 
 header {
   background: #2a2a2a;
-  padding: 0.5rem 1rem;
-  display: flex;
-  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) auto minmax(16rem, 1fr);
+  gap: 1rem;
   align-items: center;
   border-bottom: 1px solid #444;
 }
@@ -35,6 +36,12 @@ header {
   gap: 0.5rem;
 }
 
+.model-description {
+  color: #d6d6d6;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
 main#chat-container {
   flex: 1;
   padding: 1rem;
@@ -49,6 +56,7 @@ main#chat-container {
   padding: 0.75rem;
   border-radius: 10px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .message.user {
@@ -61,6 +69,15 @@ main#chat-container {
   align-self: flex-start;
   background-color: #444;
   color: #fff;
+}
+
+.message.status {
+  align-self: center;
+  background-color: #252525;
+  border: 1px solid #555;
+  color: #d6d6d6;
+  font-size: 0.9rem;
+  max-width: 90%;
 }
 
 #upload-area {
@@ -104,21 +121,24 @@ footer {
 #prompt-form {
   display: flex;
   width: 100%;
-  max-width: 800px;
+  max-width: 900px;
   gap: 0.5rem;
 }
 
-#prompt-input {
-  flex: 1;
+#prompt-input,
+#model-select {
   padding: 0.5rem;
-  border: none;
   border-radius: 5px;
   background-color: #1e1e1e;
   color: #fff;
   border: 1px solid #444;
 }
 
-#submit-btn {
+#prompt-input {
+  flex: 1;
+}
+
+button {
   background-color: #ffff66;
   color: #000;
   border: none;
@@ -126,4 +146,27 @@ footer {
   border-radius: 5px;
   cursor: pointer;
   font-weight: bold;
+}
+
+button:disabled,
+#prompt-input:disabled,
+#model-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  header {
+    grid-template-columns: 1fr;
+  }
+
+  .model-controls,
+  #prompt-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .message {
+    max-width: 95%;
+  }
 }
