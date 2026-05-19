@@ -5,7 +5,7 @@ A lightweight local Web UI for chatting with models served by Ollama. The Python
 ## Features
 
 - Local browser UI for Ollama models
-- Model selector from `models.json`
+- Model selector from Ollama's public model library, with `models.json` as a fallback
 - Local installed model detection through Ollama `/api/tags`
 - Streaming prompt responses through Ollama `/api/generate`
 - Streaming model downloads through Ollama `/api/pull`
@@ -82,6 +82,8 @@ http://127.0.0.1:11435/
 ```
 
 Do not open `index.html` directly with a `file://` URL. Use the Flask helper URL so the UI, pull endpoint, and Ollama generation proxy all share the same local origin.
+
+The model selector is scoped to Ollama models that are suitable for this chat UI's `/api/generate` workflow. Embedding-only models, such as text embedding models, are intentionally excluded from the remote catalog because they are not applicable for conversational prompt/response generation in this application.
 
 ## Pull a Model
 

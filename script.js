@@ -71,17 +71,31 @@ function setModelDescription(modelName) {
   }
 
   const description = document.createElement('div');
-  description.textContent = `Description: ${model.description}`;
+  description.textContent = `Description: ${model.description || 'No description available.'}`;
 
   const updated = document.createElement('div');
-  updated.textContent = `Catalog updated: ${model.updated}`;
+  updated.textContent = `Catalog updated: ${model.updated || 'unknown'}`;
+
+  const details = [];
+  if (Array.isArray(model.capabilities) && model.capabilities.length) {
+    details.push(`Capabilities: ${model.capabilities.join(', ')}`);
+  }
+  if (Array.isArray(model.sizes) && model.sizes.length) {
+    details.push(`Sizes: ${model.sizes.join(', ')}`);
+  }
 
   const installed = document.createElement('div');
   installed.textContent = installedModels.has(modelName) || installedModels.has(`${modelName}:latest`)
     ? 'Local status: installed'
     : 'Local status: not detected locally';
 
-  modelDescription.append(description, updated, installed);
+  const detailNodes = details.map((detail) => {
+    const node = document.createElement('div');
+    node.textContent = detail;
+    return node;
+  });
+
+  modelDescription.append(description, updated, ...detailNodes, installed);
 }
 
 async function fetchJson(url, options = {}) {
@@ -103,26 +117,57 @@ async function fetchInstalledModels() {
   }
 }
 
+async function fetchModelCatalog() {
+  try {
+    return await fetchJson('/api/models');
+  } catch (error) {
+    appendStatus(`Ollama model catalog unavailable, using bundled list: ${error.message}`);
+    return fetchJson('models.json');
+  }
+}
+
+function addModelOption(model) {
+  if (!model || !model.name || modelsMap[model.name]) {
+    return;
+  }
+
+  modelsMap[model.name] = model;
+  const option = document.createElement('option');
+  option.value = model.name;
+  option.textContent = model.name;
+  modelSelect.appendChild(option);
+}
+
+function addInstalledModelsToCatalog() {
+  installedModels.forEach((name) => {
+    const baseName = name.endsWith(':latest') ? name.slice(0, -7) : name;
+    if (modelsMap[baseName] || modelsMap[name]) {
+      return;
+    }
+
+    addModelOption({
+      name,
+      description: 'Installed local Ollama model.',
+      updated: 'local',
+    });
+  });
+}
+
 async function fetchModels() {
   try {
     await fetchInstalledModels();
 
-    const models = await fetchJson('models.json');
+    const models = await fetchModelCatalog();
     modelsMap = {};
     modelSelect.replaceChildren();
 
-    models.forEach((model) => {
-      modelsMap[model.name] = model;
-      const option = document.createElement('option');
-      option.value = model.name;
-      option.textContent = model.name;
-      modelSelect.appendChild(option);
-    });
+    models.forEach(addModelOption);
+    addInstalledModelsToCatalog();
 
     if (modelsMap[currentModel]) {
       modelSelect.value = currentModel;
-    } else if (models.length > 0) {
-      currentModel = models[0].name;
+    } else if (modelSelect.options.length > 0) {
+      currentModel = modelSelect.options[0].value;
       modelSelect.value = currentModel;
     }
 
