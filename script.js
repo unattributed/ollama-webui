@@ -20,6 +20,27 @@ function stripAnsiCodes(value) {
   );
 }
 
+function previewText(value, maxLength = 180) {
+  const text = stripAnsiCodes(value).replace(/\s+/g, ' ').trim();
+  if (!text) {
+    return '[empty response]';
+  }
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function responseErrorMessage(response, text) {
+  try {
+    const payload = JSON.parse(text);
+    if (payload && typeof payload.error === 'string' && payload.error.trim()) {
+      return payload.error;
+    }
+  } catch {
+    // Fall through to a sanitized raw-body preview.
+  }
+
+  return `request failed with HTTP ${response.status}: ${previewText(text)}`;
+}
+
 function appendMessage(role, text) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
@@ -31,6 +52,14 @@ function appendMessage(role, text) {
 
 function appendStatus(text) {
   return appendMessage('status', text);
+}
+
+function parseGenerateLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    throw new Error(`invalid stream response from /api/generate: ${previewText(line)}`);
+  }
 }
 
 function setModelDescription(modelName) {
@@ -59,7 +88,7 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `request failed with HTTP ${response.status}`);
+    throw new Error(responseErrorMessage(response, text));
   }
   return response.json();
 }
@@ -116,10 +145,15 @@ function pullSelectedModel() {
   promptInput.placeholder = 'Pulling model...';
   pullModelButton.disabled = true;
   const statusMessage = appendStatus(`Starting model pull: ${model}`);
+  let lastPullLine = '';
   const eventSource = new EventSource(`/pull_model?model=${encodeURIComponent(model)}`);
 
   eventSource.onmessage = (event) => {
     const line = stripAnsiCodes(event.data);
+    if (line === lastPullLine) {
+      return;
+    }
+    lastPullLine = line;
     statusMessage.textContent += `\n${line}`;
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
@@ -167,12 +201,31 @@ async function submitPrompt(event) {
       body: JSON.stringify({ model, prompt, stream: true }),
     });
 
-    if (!response.ok || !response.body) {
+    if (!response.ok) {
       const text = await response.text();
-      throw new Error(text || `request failed with HTTP ${response.status}`);
+      throw new Error(responseErrorMessage(response, text));
+    }
+
+    if (!response.body) {
+      throw new Error('streaming response body is unavailable');
     }
 
     const reader = response.body.getReader();
+    const handleLine = (line) => {
+      if (!line.trim()) {
+        return;
+      }
+
+      const data = parseGenerateLine(line);
+      if (data.error) {
+        throw new Error(String(data.error));
+      }
+      if (data.response) {
+        fullText += data.response;
+        aiMessage.textContent = fullText;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -185,21 +238,12 @@ async function submitPrompt(event) {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (!line.trim()) {
-          continue;
-        }
-
-        const data = JSON.parse(line);
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        if (data.response) {
-          fullText += data.response;
-          aiMessage.textContent = fullText;
-          chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
+        handleLine(line);
       }
     }
+
+    buffer += decoder.decode();
+    handleLine(buffer);
 
     if (!fullText) {
       aiMessage.textContent = '[no response returned]';

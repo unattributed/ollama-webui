@@ -18,6 +18,7 @@ from typing import Any, Iterator
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
@@ -50,6 +51,14 @@ def sse_line(message: str) -> str:
     """Format a single Server-Sent Events data message."""
     safe_message = message.replace("\r", " ").replace("\n", " ")
     return f"data: {safe_message}\n\n"
+
+
+def decode_stream_line(line: str | bytes, encoding: str | None = None) -> str:
+    """Return a text line from requests.iter_lines output."""
+    if isinstance(line, bytes):
+        return line.decode(encoding or "utf-8", errors="replace")
+
+    return line
 
 
 def proxy_ollama_json(path: str) -> tuple[dict[str, Any], int]:
@@ -131,6 +140,7 @@ def api_generate() -> Response | tuple[Response, int]:
         with upstream:
             for line in upstream.iter_lines(decode_unicode=True):
                 if line:
+                    line = decode_stream_line(line, upstream.encoding)
                     yield f"{line}\n"
 
     headers = {
@@ -170,6 +180,7 @@ def pull_model() -> Response | tuple[Response, int]:
                 if not line:
                     continue
 
+                line = decode_stream_line(line, upstream.encoding)
                 try:
                     event = json.loads(line)
                 except ValueError:
@@ -199,6 +210,15 @@ def pull_model() -> Response | tuple[Response, int]:
 def serve_static(path: str) -> Response:
     """Serve static Web UI assets from the project root."""
     return send_from_directory(app.static_folder, path)
+
+
+@app.errorhandler(HTTPException)
+def api_http_error(error: HTTPException) -> Response | tuple[Response, int]:
+    """Return JSON errors for API-style routes instead of Flask HTML pages."""
+    if request.path.startswith(("/api/", "/pull_model")):
+        return jsonify({"error": error.description or error.name}), error.code or 500
+
+    return error
 
 
 def main() -> None:
