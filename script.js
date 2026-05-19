@@ -12,6 +12,7 @@ const submitButton = document.getElementById('submit-btn');
 let currentModel = 'deepseek-r1';
 let modelsMap = {};
 let installedModels = new Set();
+let currentPull = null;
 
 function stripAnsiCodes(value) {
   return String(value).replace(
@@ -52,6 +53,34 @@ function appendMessage(role, text) {
 
 function appendStatus(text) {
   return appendMessage('status', text);
+}
+
+function createPullId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function setPullControls(isPulling) {
+  promptInput.placeholder = isPulling ? 'Pulling model...' : 'Send a message...';
+  pullModelButton.textContent = isPulling ? 'Cancel Pull' : 'Pull Model';
+  pullModelButton.disabled = false;
+  modelSelect.disabled = isPulling;
+}
+
+function finishPull(statusText = null) {
+  if (currentPull) {
+    currentPull.eventSource.close();
+    if (statusText) {
+      currentPull.statusMessage.textContent += `\n${statusText}`;
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+  }
+
+  currentPull = null;
+  setPullControls(false);
 }
 
 function parseGenerateLine(line) {
@@ -181,43 +210,96 @@ async function fetchModels() {
 }
 
 function pullSelectedModel() {
+  if (currentPull) {
+    cancelCurrentPull();
+    return;
+  }
+
   const model = modelSelect.value;
   if (!model) {
     appendStatus('No model selected.');
     return;
   }
 
-  promptInput.placeholder = 'Pulling model...';
-  pullModelButton.disabled = true;
+  const pullId = createPullId();
   const statusMessage = appendStatus(`Starting model pull: ${model}`);
-  let lastPullLine = '';
-  const eventSource = new EventSource(`/pull_model?model=${encodeURIComponent(model)}`);
+  const eventSource = new EventSource(
+    `/pull_model?model=${encodeURIComponent(model)}&pull_id=${encodeURIComponent(pullId)}`
+  );
+
+  currentPull = {
+    id: pullId,
+    model,
+    eventSource,
+    statusMessage,
+    lastLine: '',
+    cancelling: false,
+  };
+  setPullControls(true);
 
   eventSource.onmessage = (event) => {
-    const line = stripAnsiCodes(event.data);
-    if (line === lastPullLine) {
+    if (!currentPull || currentPull.eventSource !== eventSource) {
       return;
     }
-    lastPullLine = line;
+
+    const line = stripAnsiCodes(event.data);
+    if (line === currentPull.lastLine) {
+      return;
+    }
+    currentPull.lastLine = line;
     statusMessage.textContent += `\n${line}`;
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
     if (line.toLowerCase().startsWith('success:')) {
-      promptInput.placeholder = 'Ready to use';
-      pullModelButton.disabled = false;
       installedModels.add(model);
       installedModels.add(`${model}:latest`);
       setModelDescription(model);
-      eventSource.close();
+      finishPull();
     }
   };
 
   eventSource.onerror = () => {
-    statusMessage.textContent += '\nConnection closed.';
-    promptInput.placeholder = 'Send a message...';
-    pullModelButton.disabled = false;
-    eventSource.close();
+    if (!currentPull || currentPull.eventSource !== eventSource) {
+      return;
+    }
+
+    finishPull(currentPull.cancelling ? 'Pull cancelled.' : 'Connection closed.');
   };
+}
+
+async function cancelCurrentPull() {
+  if (!currentPull || currentPull.cancelling) {
+    return;
+  }
+
+  const pull = currentPull;
+  pull.cancelling = true;
+  pullModelButton.disabled = true;
+  pull.statusMessage.textContent += '\nCancel requested.';
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+
+  try {
+    const response = await fetch('/api/pull_model/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pull_id: pull.id }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(responseErrorMessage(response, text));
+    }
+  } catch (error) {
+    if (currentPull === pull) {
+      pull.statusMessage.textContent += `\nCancel request failed: ${error.message}`;
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      pullModelButton.disabled = false;
+    }
+    return;
+  }
+
+  if (currentPull === pull) {
+    finishPull('Pull cancelled.');
+  }
 }
 
 async function submitPrompt(event) {

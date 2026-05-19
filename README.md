@@ -9,6 +9,7 @@ A lightweight local Web UI for chatting with models served by Ollama. The Python
 - Local installed model detection through Ollama `/api/tags`
 - Streaming prompt responses through Ollama `/api/generate`
 - Streaming model downloads through Ollama `/api/pull`
+- Cancel button for an active model pull
 - File name preview for selected uploads
 - Same-origin Flask proxy to avoid direct browser CORS issues
 
@@ -90,8 +91,10 @@ The model selector is scoped to Ollama models that are suitable for this chat UI
 Use the Web UI button, or test the pull endpoint directly:
 
 ```bash
-curl -N 'http://127.0.0.1:11435/pull_model?model=deepseek-r1'
+curl -N 'http://127.0.0.1:11435/pull_model?model=deepseek-r1&pull_id=manual-test'
 ```
+
+While a pull is active, the Web UI changes the pull button to `Cancel Pull`. Cancelling closes the active upstream Ollama pull stream for that request.
 
 ## Smoke Test
 

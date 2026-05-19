@@ -15,6 +15,7 @@ import re
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from threading import Lock
 from typing import Any, Iterator
 
 import requests
@@ -30,7 +31,10 @@ CATALOG_CACHE_SECONDS = 3600
 CATALOG_REQUEST_TIMEOUT_SECONDS = 10
 OLLAMA_LIBRARY_URL = os.environ.get("OLLAMA_LIBRARY_URL", "https://ollama.com/library")
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
+PULL_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 catalog_cache: dict[str, Any] = {"expires_at": 0.0, "models": []}
+active_pulls: dict[str, requests.Response] = {}
+active_pulls_lock = Lock()
 
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
 CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:11435", "http://localhost:11435"]}})
@@ -129,6 +133,18 @@ def validate_model_name(model: str | None) -> str | None:
     return model
 
 
+def validate_pull_id(pull_id: str | None) -> str | None:
+    """Return a client-generated pull id if it is safe to use as a lookup key."""
+    if pull_id is None:
+        return None
+
+    pull_id = pull_id.strip()
+    if not pull_id or not PULL_ID_RE.fullmatch(pull_id):
+        return None
+
+    return pull_id
+
+
 def request_timeout() -> tuple[int, int]:
     """Return the connect and read timeout tuple used for Ollama requests."""
     return (REQUEST_CONNECT_TIMEOUT_SECONDS, REQUEST_READ_TIMEOUT_SECONDS)
@@ -194,6 +210,30 @@ def model_catalog() -> list[dict[str, Any]]:
     catalog_cache["models"] = models
     catalog_cache["expires_at"] = now + CATALOG_CACHE_SECONDS
     return models
+
+
+def register_active_pull(pull_id: str, upstream: requests.Response) -> None:
+    """Track an active Ollama pull stream so it can be cancelled."""
+    with active_pulls_lock:
+        active_pulls[pull_id] = upstream
+
+
+def unregister_active_pull(pull_id: str) -> None:
+    """Stop tracking an Ollama pull stream."""
+    with active_pulls_lock:
+        active_pulls.pop(pull_id, None)
+
+
+def close_active_pull(pull_id: str) -> bool:
+    """Close an active Ollama pull stream if one exists."""
+    with active_pulls_lock:
+        upstream = active_pulls.pop(pull_id, None)
+
+    if upstream is None:
+        return False
+
+    upstream.close()
+    return True
 
 
 def proxy_ollama_json(path: str) -> tuple[dict[str, Any], int]:
@@ -295,8 +335,11 @@ def api_generate() -> Response | tuple[Response, int]:
 def pull_model() -> Response | tuple[Response, int]:
     """Pull a model through Ollama's API and stream progress to the browser."""
     model = validate_model_name(request.args.get("model"))
+    pull_id = validate_pull_id(request.args.get("pull_id"))
     if model is None:
         return jsonify({"error": "invalid or missing model parameter"}), 400
+    if pull_id is None:
+        return jsonify({"error": "invalid or missing pull_id parameter"}), 400
 
     try:
         upstream = requests.post(
@@ -313,38 +356,57 @@ def pull_model() -> Response | tuple[Response, int]:
         upstream.close()
         return jsonify({"error": error_text}), upstream.status_code
 
+    register_active_pull(pull_id, upstream)
+
     @stream_with_context
     def stream_pull() -> Iterator[str]:
-        yield sse_line(f"pulling {model}")
-        with upstream:
-            for line in upstream.iter_lines(decode_unicode=True):
-                if not line:
-                    continue
+        try:
+            yield sse_line(f"pulling {model}")
+            with upstream:
+                for line in upstream.iter_lines(decode_unicode=True):
+                    if not line:
+                        continue
 
-                line = decode_stream_line(line, upstream.encoding)
-                try:
-                    event = json.loads(line)
-                except ValueError:
-                    yield sse_line(line)
-                    continue
+                    line = decode_stream_line(line, upstream.encoding)
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        yield sse_line(line)
+                        continue
 
-                status = str(event.get("status", "progress"))
-                completed = event.get("completed")
-                total = event.get("total")
+                    status = str(event.get("status", "progress"))
+                    completed = event.get("completed")
+                    total = event.get("total")
 
-                if isinstance(completed, int) and isinstance(total, int) and total > 0:
-                    percent = completed * 100 / total
-                    yield sse_line(f"{status}: {percent:.1f}%")
-                else:
-                    yield sse_line(status)
+                    if isinstance(completed, int) and isinstance(total, int) and total > 0:
+                        percent = completed * 100 / total
+                        yield sse_line(f"{status}: {percent:.1f}%")
+                    else:
+                        yield sse_line(status)
 
-        yield sse_line("success: model pull completed")
+            yield sse_line("success: model pull completed")
+        except requests.RequestException as exc:
+            yield sse_line(f"pull interrupted: {exc}")
+        finally:
+            unregister_active_pull(pull_id)
+            upstream.close()
 
     headers = {
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
     }
     return Response(stream_pull(), mimetype="text/event-stream", headers=headers)
+
+
+@app.post("/api/pull_model/cancel")
+def cancel_pull_model() -> tuple[Response, int]:
+    """Cancel an active model pull by closing its upstream Ollama stream."""
+    body = request.get_json(silent=True) or {}
+    pull_id = validate_pull_id(body.get("pull_id") or request.args.get("pull_id"))
+    if pull_id is None:
+        return jsonify({"error": "invalid or missing pull_id parameter"}), 400
+
+    return jsonify({"cancelled": close_active_pull(pull_id)}), 200
 
 
 @app.get("/<path:path>")
