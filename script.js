@@ -1,4 +1,4 @@
-// script.js (Streaming pull logs + chat UI)
+// script.js, local Ollama chat UI
 const chatContainer = document.getElementById('chat-container');
 const promptForm = document.getElementById('prompt-form');
 const promptInput = document.getElementById('prompt-input');
@@ -7,13 +7,14 @@ const fileInput = document.getElementById('file-input');
 const filePreview = document.getElementById('file-preview');
 const pullModelButton = document.getElementById('pull-model');
 const modelDescription = document.getElementById('model-description');
+const submitButton = document.getElementById('submit-btn');
 
 let currentModel = 'deepseek-r1';
 let modelsMap = {};
+let installedModels = new Set();
 
-// 🧹 Strip ANSI control sequences for clean display
-function stripAnsiCodes(str) {
-  return str.replace(
+function stripAnsiCodes(value) {
+  return String(value).replace(
     /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
     ''
   );
@@ -21,108 +22,209 @@ function stripAnsiCodes(str) {
 
 function appendMessage(role, text) {
   const div = document.createElement('div');
-  div.className = 'message ' + role;
+  div.className = `message ${role}`;
   div.textContent = text;
   chatContainer.appendChild(div);
   chatContainer.scrollTop = chatContainer.scrollHeight;
+  return div;
 }
 
-function updateModelDescription(modelName) {
+function appendStatus(text) {
+  return appendMessage('status', text);
+}
+
+function setModelDescription(modelName) {
   const model = modelsMap[modelName];
-  if (model) {
-    modelDescription.innerHTML = `
-      <strong>Description:</strong> ${model.description}<br>
-      <strong>Updated:</strong> ${model.updated}
-    `;
-  } else {
-    modelDescription.innerHTML = '';
+  modelDescription.replaceChildren();
+
+  if (!model) {
+    return;
+  }
+
+  const description = document.createElement('div');
+  description.textContent = `Description: ${model.description}`;
+
+  const updated = document.createElement('div');
+  updated.textContent = `Catalog updated: ${model.updated}`;
+
+  const installed = document.createElement('div');
+  installed.textContent = installedModels.has(modelName) || installedModels.has(`${modelName}:latest`)
+    ? 'Local status: installed'
+    : 'Local status: not detected locally';
+
+  modelDescription.append(description, updated, installed);
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `request failed with HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function fetchInstalledModels() {
+  try {
+    const payload = await fetchJson('/api/tags');
+    installedModels = new Set((payload.models || []).flatMap((model) => [model.name, model.model].filter(Boolean)));
+  } catch (error) {
+    installedModels = new Set();
+    appendStatus(`Ollama model list unavailable: ${error.message}`);
   }
 }
 
 async function fetchModels() {
-  const res = await fetch('models.json');
-  const models = await res.json();
-  modelSelect.innerHTML = '';
-  models.forEach(model => {
-    const opt = document.createElement('option');
-    opt.value = model.name;
-    opt.textContent = model.name;
-    if (model.name === currentModel) opt.selected = true;
-    modelSelect.appendChild(opt);
-    modelsMap[model.name] = model;
-  });
-  updateModelDescription(modelSelect.value);
+  try {
+    await fetchInstalledModels();
+
+    const models = await fetchJson('models.json');
+    modelsMap = {};
+    modelSelect.replaceChildren();
+
+    models.forEach((model) => {
+      modelsMap[model.name] = model;
+      const option = document.createElement('option');
+      option.value = model.name;
+      option.textContent = model.name;
+      modelSelect.appendChild(option);
+    });
+
+    if (modelsMap[currentModel]) {
+      modelSelect.value = currentModel;
+    } else if (models.length > 0) {
+      currentModel = models[0].name;
+      modelSelect.value = currentModel;
+    }
+
+    setModelDescription(modelSelect.value);
+  } catch (error) {
+    appendStatus(`Unable to load model catalog: ${error.message}`);
+    modelSelect.disabled = true;
+    pullModelButton.disabled = true;
+    submitButton.disabled = true;
+  }
 }
 
-pullModelButton.addEventListener('click', () => {
+function pullSelectedModel() {
   const model = modelSelect.value;
-  promptInput.placeholder = 'Pulling and loading model...';
-  const statusMsg = document.createElement('div');
-  statusMsg.className = 'message status';
-  statusMsg.textContent = `🔄 Starting ollama run ${model}...`;
-  chatContainer.appendChild(statusMsg);
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+  if (!model) {
+    appendStatus('No model selected.');
+    return;
+  }
 
-  const evtSource = new EventSource(`http://localhost:11435/pull_model?model=${model}`);
-  evtSource.onmessage = function (e) {
-    const line = stripAnsiCodes(e.data);
-    statusMsg.textContent += '\n' + line;
+  promptInput.placeholder = 'Pulling model...';
+  pullModelButton.disabled = true;
+  const statusMessage = appendStatus(`Starting model pull: ${model}`);
+  const eventSource = new EventSource(`/pull_model?model=${encodeURIComponent(model)}`);
+
+  eventSource.onmessage = (event) => {
+    const line = stripAnsiCodes(event.data);
+    statusMessage.textContent += `\n${line}`;
     chatContainer.scrollTop = chatContainer.scrollHeight;
-    if (line.toLowerCase().includes('success')) {
-      promptInput.placeholder = 'Ready to Use';
+
+    if (line.toLowerCase().startsWith('success:')) {
+      promptInput.placeholder = 'Ready to use';
+      pullModelButton.disabled = false;
+      installedModels.add(model);
+      installedModels.add(`${model}:latest`);
+      setModelDescription(model);
+      eventSource.close();
     }
   };
-  evtSource.onerror = function () {
-    statusMsg.textContent += '\n❌ Connection closed.';
-    evtSource.close();
-  };
-});
 
-promptForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+  eventSource.onerror = () => {
+    statusMessage.textContent += '\nConnection closed.';
+    promptInput.placeholder = 'Send a message...';
+    pullModelButton.disabled = false;
+    eventSource.close();
+  };
+}
+
+async function submitPrompt(event) {
+  event.preventDefault();
+
   const prompt = promptInput.value.trim();
-  if (!prompt) return;
+  const model = modelSelect.value;
+  if (!prompt || !model) {
+    return;
+  }
+
   appendMessage('user', prompt);
   promptInput.value = '';
-  appendMessage('ai', '...thinking...');
+  promptInput.disabled = true;
+  submitButton.disabled = true;
 
-  const res = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: modelSelect.value, prompt, stream: true })
-  });
+  const aiMessage = appendMessage('ai', '');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
 
-  const reader = res.body.getReader();
-  let buffer = '', fullText = '';
+  try {
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt, stream: true }),
+    });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += new TextDecoder().decode(value);
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line);
-        fullText += data.response;
-      } catch {}
+    if (!response.ok || !response.body) {
+      const text = await response.text();
+      throw new Error(text || `request failed with HTTP ${response.status}`);
     }
-  }
-  const last = chatContainer.querySelector('.message.ai:last-child');
-  if (last) last.remove();
-  appendMessage('ai', fullText);
-});
 
-fileInput.addEventListener('change', () => {
+    const reader = response.body.getReader();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+
+        const data = JSON.parse(line);
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        if (data.response) {
+          fullText += data.response;
+          aiMessage.textContent = fullText;
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+      }
+    }
+
+    if (!fullText) {
+      aiMessage.textContent = '[no response returned]';
+    }
+  } catch (error) {
+    aiMessage.textContent = `Error: ${error.message}`;
+  } finally {
+    promptInput.disabled = false;
+    submitButton.disabled = false;
+    promptInput.focus();
+  }
+}
+
+function previewSelectedFiles() {
   filePreview.textContent = '';
   for (const file of fileInput.files) {
-    filePreview.textContent += `📄 ${file.name}\n`;
+    filePreview.textContent += `📄 ${file.name} (${file.size} bytes)\n`;
   }
-});
+}
 
+pullModelButton.addEventListener('click', pullSelectedModel);
+promptForm.addEventListener('submit', submitPrompt);
+fileInput.addEventListener('change', previewSelectedFiles);
 modelSelect.addEventListener('change', () => {
-  updateModelDescription(modelSelect.value);
+  currentModel = modelSelect.value;
+  setModelDescription(currentModel);
 });
-
 window.addEventListener('DOMContentLoaded', fetchModels);

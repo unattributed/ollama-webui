@@ -1,151 +1,162 @@
 # Ollama Web UI
 
-![Verified Commits](https://img.shields.io/badge/commits-signed-blue?logo=gnupg&label=GPG%20Signed)
-
-A lightweight, client-side JavaScript interface for interacting with Ollama's local model server via `localhost:11434`. Includes a model pull server powered by Flask to install and manage multiple models.
+A lightweight local Web UI for chatting with models served by Ollama. The Python helper serves the static frontend, proxies browser requests to the local Ollama API, streams model pull progress, and streams generation responses back to the browser.
 
 ## Features
 
-- Model selector with `:latest` tag support
-- ChatGPT-style streaming responses
-- Prompt history
-- File upload and zip preview
-- Model pull interface (`pull_model.py`)
-- Automatically detects and downloads models
+- Local browser UI for Ollama models
+- Model selector from `models.json`
+- Local installed model detection through Ollama `/api/tags`
+- Streaming prompt responses through Ollama `/api/generate`
+- Streaming model downloads through Ollama `/api/pull`
+- File name preview for selected uploads
+- Same-origin Flask proxy to avoid direct browser CORS issues
 
----
+## Requirements
 
-## 🚀 Getting Started
+- Parrot OS or another Debian-family Linux system
+- Python 3.9 or newer
+- Existing project virtual environment at `.venv`, or a new one if this is a fresh checkout
+- Ollama installed and listening on `127.0.0.1:11434`
 
-### 1. Clone the Repository
+## Setup
 
-```bash
-git clone https://github.com/yourusername/ollama-webui.git
-cd ollama-webui
-````
-
-### 2. Set Up a Virtual Environment (Recommended)
-
-We strongly recommend using a virtual environment to isolate dependencies.
+From the project directory:
 
 ```bash
-python3 -m venv .venv
+cd /home/foo/Workspace/ollama-webui
+```
+
+Use the existing virtual environment when it already exists:
+
+```bash
 source .venv/bin/activate
 ```
 
-### 3. Install Python Dependencies
-
-Make sure you're inside the virtual environment before running:
+Only create the virtual environment if `.venv` does not already exist:
 
 ```bash
-pip install -r requirements.txt
+test -d .venv || python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-> If you encounter any missing modules, ensure you're using the correct Python version and have activated the virtual environment.
-
----
-
-## 🧠 Pulling a Model
-
-Use the Flask-based helper script to pull a model via HTTP.
+Install the direct runtime dependencies:
 
 ```bash
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip check
+```
+
+Do not use `pip freeze > requirements.txt` for normal maintenance. This project only needs direct runtime dependencies in `requirements.txt`; freezing every transitive package can reintroduce resolver conflicts.
+
+## Verify Ollama
+
+Confirm Ollama is reachable before starting the Web UI helper:
+
+```bash
+curl -sS http://127.0.0.1:11434/api/version
+curl -sS http://127.0.0.1:11434/api/tags
+```
+
+If Ollama is not running, start it using your local Ollama installation method, for example:
+
+```bash
+ollama serve
+```
+
+## Start the Web UI
+
+Run the Flask helper from the project root:
+
+```bash
+cd /home/foo/Workspace/ollama-webui
+source .venv/bin/activate
 python scripts/pull_model.py
 ```
 
-By default, this will start a local server on [http://127.0.0.1:11435](http://127.0.0.1:11435) and expose `/pull_model?model=MODEL_NAME`.
+Open the Web UI in your browser:
 
-Example:
+```text
+http://127.0.0.1:11435/
+```
+
+Do not open `index.html` directly with a `file://` URL. Use the Flask helper URL so the UI, pull endpoint, and Ollama generation proxy all share the same local origin.
+
+## Pull a Model
+
+Use the Web UI button, or test the pull endpoint directly:
 
 ```bash
-curl http://127.0.0.1:11435/pull_model?model=deepseek-coder:latest
+curl -N 'http://127.0.0.1:11435/pull_model?model=deepseek-r1'
 ```
 
----
+## Smoke Test
 
-## 🌐 Using the Web UI
-
-1. Start your Ollama server (if not already running):
+Run this from the project root with the virtual environment active:
 
 ```bash
-ollama run deepseek-coder:latest
+python -m pip check
+python -m py_compile scripts/pull_model.py scripts/deploy_full_ollama_ui.py
+curl -sS http://127.0.0.1:11434/api/version
 ```
 
-2. Open `index.html` in your browser.
+In a second terminal, start the helper:
 
-> The UI connects to `localhost:11434` to send/receive prompt data.
-
----
-
-## 📦 Project Structure
-
+```bash
+source .venv/bin/activate
+python scripts/pull_model.py
 ```
+
+Then test the helper health endpoint:
+
+```bash
+curl -sS http://127.0.0.1:11435/health
+```
+
+## Install or Remove a Local Copy
+
+Preview installation:
+
+```bash
+python scripts/deploy_full_ollama_ui.py --install --dry-run --verbose
+```
+
+Install to the default target, `~/ollama-webui`:
+
+```bash
+python scripts/deploy_full_ollama_ui.py --install --verbose
+```
+
+Remove the installed copy:
+
+```bash
+python scripts/deploy_full_ollama_ui.py --uninstall
+```
+
+## Project Structure
+
+```text
 ollama-webui/
-├── index.html           # Web UI (static)
-├── style.css            # UI styling
-├── script.js            # JS logic for streaming/chat
-├── models.json          # Predefined model list
-├── pull_model.py        # Flask server to trigger model pulls
-└── requirements.txt     # Python dependencies
+├── index.html
+├── style.css
+├── script.js
+├── models.json
+├── requirements.txt
+└── scripts/
+    ├── deploy_full_ollama_ui.py
+    └── pull_model.py
 ```
 
----
+## Notes
 
-## 🔧 Development Tips
+- The helper defaults to `http://127.0.0.1:11434` for Ollama.
+- Override the Ollama API location with `OLLAMA_HOST` when needed:
 
-* Use `source .venv/bin/activate` each time you start work
-* Run `deactivate` to leave the virtual environment
-* Update dependencies with `pip freeze > requirements.txt`
-
----
-
-## 📁 Git Ignore Recommendations
-
-To keep your repository clean and avoid committing CI/CD secrets or workflows unintentionally, make sure the following are in your `.gitignore`:
-
-```
-# Editor & OS temp files
-*.swp
-*.swo
-*.bak
-*.tmp
-.DS_Store
-Thumbs.db
-
-# Scripts, backups, and uploads
-*.zip
-*.tar
-*.sh
-*.log
-*~
-_tmpbkup/
-
-# files for testing, and development
-scripts/__pycache__
-tests/__pycache__
-
-# VS Code workspace files (optional)
-.vscode/ #vscode is wonderful
-.github/
-
-# Python VENV
-.venv/
+```bash
+OLLAMA_HOST='http://127.0.0.1:11434' python scripts/pull_model.py
 ```
 
-> `.github/` is ignored intentionally if you're managing CI/CD workflows locally or externally.
-
----
-
-## 🛠️ Requirements
-
-* Python 3.9+
-* pip
-* Ollama installed and accessible via terminal
-* Modern browser (for full Web UI support)
-
----
-
-## 📜 License
+## License
 
 MIT License
-

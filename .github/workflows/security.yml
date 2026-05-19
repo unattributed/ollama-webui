@@ -1,15 +1,37 @@
 name: Security CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
-  audit:
+  python-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out repository
+        uses: actions/checkout@v6
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
-      - run: pip install pip-audit
-      - run: pip-audit -r requirements.txt
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pip-audit
+
+      - name: Validate installed dependencies
+        run: python -m pip check
+
+      - name: Compile Python helpers
+        run: python -m py_compile scripts/pull_model.py scripts/deploy_full_ollama_ui.py
+
+      - name: Audit Python dependencies
+        run: python -m pip_audit -r requirements.txt

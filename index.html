@@ -12,14 +12,14 @@
     <header>
       <div class="title">🧠 Ollama Web UI</div>
       <div class="model-controls">
-        <label for="model-select">Choose Model:</label>
-        <select id="model-select"></select>
-        <button id="pull-model">Pull Model</button>
+        <label for="model-select">Model</label>
+        <select id="model-select" aria-label="Choose model"></select>
+        <button type="button" id="pull-model">Pull Model</button>
       </div>
-      <div id="model-description" class="model-description"></div>
+      <div id="model-description" class="model-description" aria-live="polite"></div>
     </header>
 
-    <main id="chat-container"></main>
+    <main id="chat-container" aria-live="polite"></main>
 
     <div id="upload-area">
       <input type="file" id="file-input" multiple />
