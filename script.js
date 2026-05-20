@@ -186,7 +186,12 @@ function isTextLikeFile(file) {
     return true;
   }
 
-  return TEXT_FILE_EXTENSIONS.has(fileExtension(file.name));
+  const extension = fileExtension(file.name);
+  if (!extension && (!file.type || file.type === 'application/octet-stream')) {
+    return true;
+  }
+
+  return TEXT_FILE_EXTENSIONS.has(extension);
 }
 
 function formatBytes(value) {
