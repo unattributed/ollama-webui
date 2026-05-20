@@ -3,6 +3,7 @@ const chatContainer = document.getElementById('chat-container');
 const promptForm = document.getElementById('prompt-form');
 const promptInput = document.getElementById('prompt-input');
 const modelSelect = document.getElementById('model-select');
+const sizeSelect = document.getElementById('size-select');
 const fileInput = document.getElementById('file-input');
 const filePreview = document.getElementById('file-preview');
 const pullModelButton = document.getElementById('pull-model');
@@ -10,6 +11,7 @@ const modelDescription = document.getElementById('model-description');
 const submitButton = document.getElementById('submit-btn');
 
 let currentModel = 'deepseek-r1';
+let currentSize = '';
 let modelsMap = {};
 let installedModels = new Set();
 let currentPull = null;
@@ -63,11 +65,84 @@ function createPullId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function splitModelReference(value) {
+  const name = String(value || '').trim();
+  const lastColon = name.lastIndexOf(':');
+  const lastSlash = name.lastIndexOf('/');
+
+  if (lastColon > lastSlash) {
+    return {
+      baseName: name.slice(0, lastColon),
+      tag: name.slice(lastColon + 1),
+    };
+  }
+
+  return { baseName: name, tag: '' };
+}
+
+function uniqueValues(values) {
+  const seen = new Set();
+  return values.filter((value) => {
+    const normalized = String(value || '').trim();
+    const key = normalized.toLowerCase();
+    if (!normalized || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function addSizeToModel(modelName, size) {
+  const normalized = String(size || '').trim();
+  if (!modelName || !normalized || normalized.toLowerCase() === 'latest' || !modelsMap[modelName]) {
+    return;
+  }
+
+  const sizes = Array.isArray(modelsMap[modelName].sizes) ? modelsMap[modelName].sizes : [];
+  modelsMap[modelName].sizes = uniqueValues([...sizes, normalized]);
+}
+
+function installedSizesForModel(modelName) {
+  const sizes = [];
+  installedModels.forEach((installedName) => {
+    const { baseName, tag } = splitModelReference(installedName);
+    if (baseName === modelName && tag && tag.toLowerCase() !== 'latest') {
+      sizes.push(tag);
+    }
+  });
+
+  return uniqueValues(sizes);
+}
+
+function getModelSizes(modelName) {
+  const model = modelsMap[modelName];
+  const catalogSizes = model && Array.isArray(model.sizes) ? model.sizes : [];
+  return uniqueValues([...catalogSizes, ...installedSizesForModel(modelName)]);
+}
+
+function selectedModelReference() {
+  const modelName = modelSelect.value;
+  const size = sizeSelect.value;
+  return modelName && size ? `${modelName}:${size}` : modelName;
+}
+
+function isModelInstalled(modelName, size = '') {
+  if (!modelName) {
+    return false;
+  }
+
+  const modelReference = size ? `${modelName}:${size}` : modelName;
+  return installedModels.has(modelReference) || (!size && installedModels.has(`${modelName}:latest`));
+}
+
 function setPullControls(isPulling) {
   promptInput.placeholder = isPulling ? 'Pulling model...' : 'Send a message...';
   pullModelButton.textContent = isPulling ? 'Cancel Pull' : 'Pull Model';
   pullModelButton.disabled = false;
   modelSelect.disabled = isPulling;
+  sizeSelect.disabled = isPulling || sizeSelect.options.length <= 1;
 }
 
 function finishPull(statusText = null) {
@@ -89,6 +164,30 @@ function parseGenerateLine(line) {
   } catch {
     throw new Error(`invalid stream response from /api/generate: ${previewText(line)}`);
   }
+}
+
+function populateSizeSelect(modelName) {
+  const sizes = getModelSizes(modelName);
+  const preferredSize = sizes.includes(currentSize) ? currentSize : sizes[0] || '';
+
+  sizeSelect.replaceChildren();
+  if (sizes.length) {
+    sizes.forEach((size) => {
+      const option = document.createElement('option');
+      option.value = size;
+      option.textContent = size;
+      sizeSelect.appendChild(option);
+    });
+  } else {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'default';
+    sizeSelect.appendChild(option);
+  }
+
+  sizeSelect.value = preferredSize;
+  currentSize = sizeSelect.value;
+  sizeSelect.disabled = Boolean(currentPull) || sizes.length <= 1;
 }
 
 function setModelDescription(modelName) {
@@ -114,9 +213,11 @@ function setModelDescription(modelName) {
   }
 
   const installed = document.createElement('div');
-  installed.textContent = installedModels.has(modelName) || installedModels.has(`${modelName}:latest`)
+  const selectedSize = sizeSelect.value;
+  const modelReference = selectedModelReference();
+  installed.textContent = isModelInstalled(modelName, selectedSize)
     ? 'Local status: installed'
-    : 'Local status: not detected locally';
+    : `Local status: ${modelReference} not detected locally`;
 
   const detailNodes = details.map((detail) => {
     const node = document.createElement('div');
@@ -169,15 +270,20 @@ function addModelOption(model) {
 
 function addInstalledModelsToCatalog() {
   installedModels.forEach((name) => {
-    const baseName = name.endsWith(':latest') ? name.slice(0, -7) : name;
-    if (modelsMap[baseName] || modelsMap[name]) {
+    const { baseName, tag } = splitModelReference(name);
+    if (modelsMap[baseName]) {
+      addSizeToModel(baseName, tag);
+      return;
+    }
+    if (modelsMap[name]) {
       return;
     }
 
     addModelOption({
-      name,
+      name: baseName,
       description: 'Installed local Ollama model.',
       updated: 'local',
+      sizes: tag && tag.toLowerCase() !== 'latest' ? [tag] : [],
     });
   });
 }
@@ -200,10 +306,12 @@ async function fetchModels() {
       modelSelect.value = currentModel;
     }
 
+    populateSizeSelect(modelSelect.value);
     setModelDescription(modelSelect.value);
   } catch (error) {
     appendStatus(`Unable to load model catalog: ${error.message}`);
     modelSelect.disabled = true;
+    sizeSelect.disabled = true;
     pullModelButton.disabled = true;
     submitButton.disabled = true;
   }
@@ -215,7 +323,8 @@ function pullSelectedModel() {
     return;
   }
 
-  const model = modelSelect.value;
+  const modelName = modelSelect.value;
+  const model = selectedModelReference();
   if (!model) {
     appendStatus('No model selected.');
     return;
@@ -252,8 +361,13 @@ function pullSelectedModel() {
 
     if (line.toLowerCase().startsWith('success:')) {
       installedModels.add(model);
-      installedModels.add(`${model}:latest`);
-      setModelDescription(model);
+      if (!sizeSelect.value) {
+        installedModels.add(`${model}:latest`);
+      }
+      addSizeToModel(modelName, sizeSelect.value);
+      setModelDescription(modelName);
+      finishPull();
+    } else if (line.toLowerCase().startsWith('error:')) {
       finishPull();
     }
   };
@@ -306,7 +420,7 @@ async function submitPrompt(event) {
   event.preventDefault();
 
   const prompt = promptInput.value.trim();
-  const model = modelSelect.value;
+  const model = selectedModelReference();
   if (!prompt || !model) {
     return;
   }
@@ -396,6 +510,12 @@ promptForm.addEventListener('submit', submitPrompt);
 fileInput.addEventListener('change', previewSelectedFiles);
 modelSelect.addEventListener('change', () => {
   currentModel = modelSelect.value;
+  currentSize = '';
+  populateSizeSelect(currentModel);
+  setModelDescription(currentModel);
+});
+sizeSelect.addEventListener('change', () => {
+  currentSize = sizeSelect.value;
   setModelDescription(currentModel);
 });
 window.addEventListener('DOMContentLoaded', fetchModels);

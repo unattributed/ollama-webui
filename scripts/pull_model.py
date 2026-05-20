@@ -63,6 +63,7 @@ class OllamaLibraryParser(HTMLParser):
                 "updated": "",
                 "capabilities": [],
                 "sizes": [],
+                "badges": [],
             }
             self._depth = 1
             return
@@ -81,6 +82,8 @@ class OllamaLibraryParser(HTMLParser):
             self._start_capture("sizes")
         elif tag == "span" and "x-test-updated" in attrs_map:
             self._start_capture("updated")
+        elif tag == "span" and "text-cyan-500" in (attrs_map.get("class") or ""):
+            self._start_capture("badges")
 
     def handle_data(self, data: str) -> None:
         if self._capture:
@@ -93,7 +96,7 @@ class OllamaLibraryParser(HTMLParser):
         if self._capture:
             value = " ".join("".join(self._capture_parts).split())
             if value:
-                if self._capture in {"capabilities", "sizes"}:
+                if self._capture in {"capabilities", "sizes", "badges"}:
                     self._current[self._capture].append(value)
                 else:
                     self._current[self._capture] = value
@@ -114,9 +117,13 @@ class OllamaLibraryParser(HTMLParser):
 
         name = str(self._current.get("name", "")).strip()
         capabilities = self._current.get("capabilities", [])
+        sizes = self._current.get("sizes", [])
+        badges = [str(badge).lower() for badge in self._current.get("badges", [])]
         is_embedding_only = capabilities == ["embedding"]
-        if name and name not in self._seen_names and not is_embedding_only:
+        is_cloud_only = "cloud" in badges and not sizes
+        if name and name not in self._seen_names and not is_embedding_only and not is_cloud_only:
             self._seen_names.add(name)
+            self._current.pop("badges", None)
             self.models.append(self._current)
 
         self._current = None
@@ -370,6 +377,7 @@ def pull_model() -> Response | tuple[Response, int]:
 
     @stream_with_context
     def stream_pull() -> Iterator[str]:
+        pull_error: str | None = None
         try:
             yield sse_line(f"pulling {model}")
             with upstream:
@@ -384,6 +392,12 @@ def pull_model() -> Response | tuple[Response, int]:
                         yield sse_line(line)
                         continue
 
+                    error = event.get("error")
+                    if error:
+                        pull_error = str(error)
+                        yield sse_line(f"error: {pull_error}")
+                        break
+
                     status = str(event.get("status", "progress"))
                     completed = event.get("completed")
                     total = event.get("total")
@@ -394,7 +408,8 @@ def pull_model() -> Response | tuple[Response, int]:
                     else:
                         yield sse_line(status)
 
-            yield sse_line("success: model pull completed")
+            if pull_error is None and not is_pull_cancelled(pull_id):
+                yield sse_line("success: model pull completed")
         except Exception as exc:
             if not is_pull_cancelled(pull_id):
                 yield sse_line(f"pull interrupted: {exc}")
