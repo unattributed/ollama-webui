@@ -25,7 +25,11 @@
 
     <div id="upload-area">
       <input type="file" id="file-input" multiple />
-      <label for="file-input">📎 Upload File(s)</label>
+      <div class="upload-controls">
+        <label for="file-input">📎 Upload File(s)</label>
+        <button type="button" id="analyze-files-btn" disabled>Analyze Files</button>
+        <button type="button" id="clear-files-btn" disabled>Clear Files</button>
+      </div>
       <div id="file-preview"></div>
     </div>
 

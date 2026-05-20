@@ -11,7 +11,7 @@ A lightweight local Web UI for chatting with models served by Ollama. The Python
 - Streaming prompt responses through Ollama `/api/generate`
 - Streaming model downloads through Ollama `/api/pull`
 - Cancel button for an active model pull
-- File name preview for selected uploads
+- Text-like file analysis through prompt context
 - Same-origin Flask proxy to avoid direct browser CORS issues
 
 ## Requirements
@@ -96,6 +96,12 @@ curl -N 'http://127.0.0.1:11435/pull_model?model=deepseek-r1:7b&pull_id=manual-t
 ```
 
 While a pull is active, the Web UI changes the pull button to `Cancel Pull`. Cancelling closes the active upstream Ollama pull stream for that request.
+
+## Analyze Files
+
+Use `Upload File(s)` to select text-like files such as Markdown, plain text, code, CSV, JSON, XML, YAML, or logs. The browser reads supported files locally and adds their contents to the next prompt sent to Ollama.
+
+Click `Analyze Files` to send a default analysis request, or type your own question and press `Send`. Large files are skipped or truncated before being added to the prompt so local models are not overloaded.
 
 ## Smoke Test
 
