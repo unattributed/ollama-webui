@@ -31,12 +31,24 @@ CATALOG_REQUEST_TIMEOUT_SECONDS = 10
 OLLAMA_LIBRARY_URL = os.environ.get("OLLAMA_LIBRARY_URL", "https://ollama.com/library")
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PULL_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
+STATIC_ASSET_EXTENSIONS = {".css", ".html", ".ico", ".js", ".json"}
 catalog_cache: dict[str, Any] = {"expires_at": 0.0, "models": []}
 active_pulls: dict[str, requests.Response] = {}
 cancelled_pulls: set[str] = set()
 active_pulls_lock = Lock()
 
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
+
+
+@app.after_request
+def prevent_ui_asset_caching(response: Response) -> Response:
+    """Keep local UI edits visible without browser cache confusion."""
+    path = request.path
+    is_static_asset = Path(path).suffix in STATIC_ASSET_EXTENSIONS
+    if request.method == "GET" and (path == "/" or is_static_asset):
+        response.headers["Cache-Control"] = "no-store"
+
+    return response
 
 
 class OllamaLibraryParser(HTMLParser):
