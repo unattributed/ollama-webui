@@ -6,15 +6,54 @@ const modelSelect = document.getElementById('model-select');
 const sizeSelect = document.getElementById('size-select');
 const fileInput = document.getElementById('file-input');
 const filePreview = document.getElementById('file-preview');
+const analyzeFilesButton = document.getElementById('analyze-files-btn');
+const clearFilesButton = document.getElementById('clear-files-btn');
 const pullModelButton = document.getElementById('pull-model');
 const modelDescription = document.getElementById('model-description');
 const submitButton = document.getElementById('submit-btn');
+
+const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_FILE_CONTEXT_CHARS = 12000;
+const MAX_TOTAL_FILE_CONTEXT_CHARS = 24000;
+const TEXT_FILE_EXTENSIONS = new Set([
+  'c',
+  'conf',
+  'cpp',
+  'cs',
+  'css',
+  'csv',
+  'go',
+  'h',
+  'html',
+  'ini',
+  'java',
+  'js',
+  'json',
+  'jsx',
+  'log',
+  'md',
+  'php',
+  'py',
+  'rb',
+  'rs',
+  'sh',
+  'sql',
+  'svg',
+  'toml',
+  'ts',
+  'tsx',
+  'txt',
+  'xml',
+  'yaml',
+  'yml',
+]);
 
 let currentModel = 'deepseek-r1';
 let currentSize = '';
 let modelsMap = {};
 let installedModels = new Set();
 let currentPull = null;
+let selectedFileContexts = [];
 
 function stripAnsiCodes(value) {
   return String(value).replace(
@@ -135,6 +174,62 @@ function isModelInstalled(modelName, size = '') {
 
   const modelReference = size ? `${modelName}:${size}` : modelName;
   return installedModels.has(modelReference) || (!size && installedModels.has(`${modelName}:latest`));
+}
+
+function fileExtension(fileName) {
+  const dotIndex = String(fileName || '').lastIndexOf('.');
+  return dotIndex >= 0 ? fileName.slice(dotIndex + 1).toLowerCase() : '';
+}
+
+function isTextLikeFile(file) {
+  if (file.type.startsWith('text/')) {
+    return true;
+  }
+
+  return TEXT_FILE_EXTENSIONS.has(fileExtension(file.name));
+}
+
+function formatBytes(value) {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result || '')));
+    reader.addEventListener('error', () => reject(reader.error || new Error(`Unable to read ${file.name}`)));
+    reader.readAsText(file);
+  });
+}
+
+function buildFileContextPrompt(prompt) {
+  if (!selectedFileContexts.length) {
+    return prompt;
+  }
+
+  const fileSections = selectedFileContexts.map((file) => (
+    `File: ${file.name}\nSize: ${formatBytes(file.size)}\nContent:\n${file.content}`
+  ));
+
+  return [
+    'Use the uploaded file contents below as context for the user request.',
+    'If the request asks for analysis, summarize the important points, call out notable issues, and answer using evidence from the files.',
+    '',
+    fileSections.join('\n\n---\n\n'),
+    '',
+    `User request: ${prompt}`,
+  ].join('\n');
+}
+
+function setFileControls(hasFiles) {
+  analyzeFilesButton.disabled = !hasFiles;
+  clearFilesButton.disabled = !hasFiles;
 }
 
 function setPullControls(isPulling) {
@@ -429,17 +524,19 @@ async function submitPrompt(event) {
   promptInput.value = '';
   promptInput.disabled = true;
   submitButton.disabled = true;
+  analyzeFilesButton.disabled = true;
 
   const aiMessage = appendMessage('ai', '');
   const decoder = new TextDecoder();
   let buffer = '';
   let fullText = '';
+  const promptWithFiles = buildFileContextPrompt(prompt);
 
   try {
     const response = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, stream: true }),
+      body: JSON.stringify({ model, prompt: promptWithFiles, stream: true }),
     });
 
     if (!response.ok) {
@@ -494,20 +591,83 @@ async function submitPrompt(event) {
   } finally {
     promptInput.disabled = false;
     submitButton.disabled = false;
+    setFileControls(selectedFileContexts.length > 0);
     promptInput.focus();
   }
 }
 
-function previewSelectedFiles() {
+async function previewSelectedFiles() {
+  const files = Array.from(fileInput.files || []);
+  selectedFileContexts = [];
   filePreview.textContent = '';
-  for (const file of fileInput.files) {
-    filePreview.textContent += `📄 ${file.name} (${file.size} bytes)\n`;
+  setFileControls(false);
+
+  if (!files.length) {
+    return;
   }
+
+  const previewLines = [];
+  let remainingChars = MAX_TOTAL_FILE_CONTEXT_CHARS;
+
+  for (const file of files) {
+    if (!isTextLikeFile(file)) {
+      previewLines.push(`${file.name} (${formatBytes(file.size)}) skipped: not a text-like file.`);
+      continue;
+    }
+
+    if (file.size > MAX_FILE_BYTES) {
+      previewLines.push(`${file.name} (${formatBytes(file.size)}) skipped: larger than ${formatBytes(MAX_FILE_BYTES)}.`);
+      continue;
+    }
+
+    if (remainingChars <= 0) {
+      previewLines.push(`${file.name} skipped: total file context limit reached.`);
+      continue;
+    }
+
+    try {
+      const rawContent = await readFileAsText(file);
+      const contentLimit = Math.min(MAX_FILE_CONTEXT_CHARS, remainingChars);
+      const content = rawContent.slice(0, contentLimit);
+      const truncated = rawContent.length > content.length;
+
+      selectedFileContexts.push({
+        name: file.name,
+        size: file.size,
+        content,
+      });
+      remainingChars -= content.length;
+      previewLines.push(`${file.name} (${formatBytes(file.size)}) ready${truncated ? ', truncated' : ''}.`);
+    } catch (error) {
+      previewLines.push(`${file.name} (${formatBytes(file.size)}) skipped: ${error.message}`);
+    }
+  }
+
+  filePreview.textContent = previewLines.join('\n');
+  setFileControls(selectedFileContexts.length > 0);
+}
+
+function clearSelectedFiles() {
+  fileInput.value = '';
+  selectedFileContexts = [];
+  filePreview.textContent = '';
+  setFileControls(false);
+}
+
+function analyzeSelectedFiles() {
+  if (!selectedFileContexts.length || submitButton.disabled) {
+    return;
+  }
+
+  promptInput.value = 'Analyze the uploaded file contents.';
+  promptForm.requestSubmit();
 }
 
 pullModelButton.addEventListener('click', pullSelectedModel);
 promptForm.addEventListener('submit', submitPrompt);
 fileInput.addEventListener('change', previewSelectedFiles);
+analyzeFilesButton.addEventListener('click', analyzeSelectedFiles);
+clearFilesButton.addEventListener('click', clearSelectedFiles);
 modelSelect.addEventListener('change', () => {
   currentModel = modelSelect.value;
   currentSize = '';
