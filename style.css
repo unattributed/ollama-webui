@@ -126,7 +126,8 @@ footer {
 }
 
 #prompt-input,
-#model-select {
+#model-select,
+#size-select {
   padding: 0.5rem;
   border-radius: 5px;
   background-color: #1e1e1e;
@@ -150,7 +151,8 @@ button {
 
 button:disabled,
 #prompt-input:disabled,
-#model-select:disabled {
+#model-select:disabled,
+#size-select:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
