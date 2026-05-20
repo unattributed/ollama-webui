@@ -20,7 +20,6 @@ from typing import Any, Iterator
 
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
-from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,7 +37,6 @@ cancelled_pulls: set[str] = set()
 active_pulls_lock = Lock()
 
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
-CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:11435", "http://localhost:11435"]}})
 
 
 class OllamaLibraryParser(HTMLParser):
