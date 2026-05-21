@@ -32,6 +32,8 @@ OLLAMA_LIBRARY_URL = os.environ.get("OLLAMA_LIBRARY_URL", "https://ollama.com/li
 MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PULL_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 STATIC_ASSET_EXTENSIONS = {".css", ".html", ".ico", ".js", ".json"}
+UPDATED_AGE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(minute|hour|day|week|month|year)s?\s+ago")
+MODEL_CAPABILITY_TAGS = {"audio", "cloud", "embedding", "thinking", "tools", "vision"}
 catalog_cache: dict[str, Any] = {"expires_at": 0.0, "models": []}
 active_pulls: dict[str, requests.Response] = {}
 cancelled_pulls: set[str] = set()
@@ -84,6 +86,8 @@ class OllamaLibraryParser(HTMLParser):
         self._depth += 1
         if tag == "div" and "x-test-model-title" in attrs_map:
             self._current["name"] = attrs_map.get("title", "").strip()
+        elif tag == "span" and "x-test-search-response-title" in attrs_map:
+            self._start_capture("name")
         elif tag == "p" and not self._current["description"]:
             self._start_capture("description")
         elif tag == "span" and "x-test-capability" in attrs_map:
@@ -126,13 +130,14 @@ class OllamaLibraryParser(HTMLParser):
             return
 
         name = str(self._current.get("name", "")).strip()
-        capabilities = self._current.get("capabilities", [])
-        sizes = self._current.get("sizes", [])
-        badges = [str(badge).lower() for badge in self._current.get("badges", [])]
-        is_embedding_only = capabilities == ["embedding"]
-        is_cloud_only = "cloud" in badges and not sizes
-        if name and name not in self._seen_names and not is_embedding_only and not is_cloud_only:
+        if name and name not in self._seen_names:
             self._seen_names.add(name)
+            capabilities = self._current.get("capabilities", [])
+            badges = [str(badge).strip().lower() for badge in self._current.get("badges", [])]
+            self._current["capabilities"] = [
+                *capabilities,
+                *(badge for badge in badges if badge in MODEL_CAPABILITY_TAGS and badge not in capabilities),
+            ]
             self._current.pop("badges", None)
             self.models.append(self._current)
 
@@ -196,6 +201,37 @@ def load_bundled_model_catalog() -> list[dict[str, Any]]:
     return [model for model in payload if isinstance(model, dict) and model.get("name")]
 
 
+def updated_age_sort_value(model: dict[str, Any]) -> float:
+    """Return an approximate age in days for Ollama's relative updated label."""
+    updated = str(model.get("updated", "")).strip().lower()
+    if not updated or updated == "local":
+        return float("inf")
+    if updated == "today":
+        return 0
+    if updated == "yesterday":
+        return 1
+
+    match = UPDATED_AGE_RE.search(updated)
+    if match is None:
+        return float("inf")
+
+    amount = float(match.group(1))
+    unit_days = {
+        "minute": 1 / 1440,
+        "hour": 1 / 24,
+        "day": 1,
+        "week": 7,
+        "month": 30,
+        "year": 365,
+    }
+    return amount * unit_days[match.group(2)]
+
+
+def sort_models_by_updated(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort models newest-first using the timestamp available from Ollama."""
+    return sorted(models, key=lambda model: (updated_age_sort_value(model), str(model.get("name", ""))))
+
+
 def fetch_ollama_library_catalog() -> list[dict[str, Any]]:
     """Fetch and parse the current public Ollama model library."""
     response = requests.get(
@@ -225,6 +261,7 @@ def model_catalog() -> list[dict[str, Any]]:
     if not models:
         models = load_bundled_model_catalog()
 
+    models = sort_models_by_updated(models)
     catalog_cache["models"] = models
     catalog_cache["expires_at"] = now + CATALOG_CACHE_SECONDS
     return models

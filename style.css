@@ -132,6 +132,7 @@ footer {
 }
 
 #prompt-input,
+#model-type-select,
 #model-select,
 #size-select {
   padding: 0.5rem;
@@ -157,6 +158,7 @@ button {
 
 button:disabled,
 #prompt-input:disabled,
+#model-type-select:disabled,
 #model-select:disabled,
 #size-select:disabled,
 #analyze-files-btn:disabled,
