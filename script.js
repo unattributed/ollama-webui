@@ -12,10 +12,23 @@ const clearFilesButton = document.getElementById('clear-files-btn');
 const pullModelButton = document.getElementById('pull-model');
 const modelDescription = document.getElementById('model-description');
 const submitButton = document.getElementById('submit-btn');
+const projectRootInput = document.getElementById('project-root-input');
+const projectQueryInput = document.getElementById('project-query-input');
+const projectFileInput = document.getElementById('project-file-input');
+const projectCommandInput = document.getElementById('project-command-input');
+const loadProjectButton = document.getElementById('load-project-btn');
+const projectContextButton = document.getElementById('project-context-btn');
+const projectSearchButton = document.getElementById('project-search-btn');
+const projectReadButton = document.getElementById('project-read-btn');
+const projectRunButton = document.getElementById('project-run-btn');
+const projectClearButton = document.getElementById('project-clear-btn');
+const projectAgentStatus = document.getElementById('project-agent-status');
+const projectAgentPreview = document.getElementById('project-agent-preview');
 
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_FILE_CONTEXT_CHARS = 12000;
 const MAX_TOTAL_FILE_CONTEXT_CHARS = 24000;
+const MAX_PROJECT_CONTEXT_CHARS = 30000;
 const TEXT_FILE_EXTENSIONS = new Set([
   'c',
   'conf',
@@ -85,6 +98,8 @@ let modelsMap = {};
 let installedModels = new Set();
 let currentPull = null;
 let selectedFileContexts = [];
+let activeProjectRoot = '';
+let projectContextEntries = [];
 
 function stripAnsiCodes(value) {
   return String(value).replace(
@@ -330,23 +345,59 @@ function readFileAsText(file) {
   });
 }
 
+function boundedProjectContextText() {
+  let remaining = MAX_PROJECT_CONTEXT_CHARS;
+  const sections = [];
+
+  projectContextEntries.forEach((entry) => {
+    if (remaining <= 0) {
+      return;
+    }
+
+    const header = `Source: ${entry.title}`;
+    const content = String(entry.content || '');
+    const section = `${header}\n${content}`;
+    const boundedSection = section.slice(0, remaining);
+    sections.push(boundedSection);
+    remaining -= boundedSection.length;
+  });
+
+  return sections.join('\n\n---\n\n');
+}
+
 function buildFileContextPrompt(prompt) {
-  if (!selectedFileContexts.length) {
+  const sections = [];
+
+  if (projectContextEntries.length) {
+    sections.push([
+      'Use the local project context below as guardrails for this request.',
+      'Prefer project documentation and tool output over general assumptions, and cite relevant source paths when useful.',
+      '',
+      boundedProjectContextText(),
+    ].join('\n'));
+  }
+
+  if (selectedFileContexts.length) {
+    const fileSections = selectedFileContexts.map((file) => (
+      `File: ${file.name}\nSize: ${formatBytes(file.size)}\nContent:\n${file.content}`
+    ));
+    sections.push([
+      'Use the uploaded file contents below as additional context.',
+      '',
+      fileSections.join('\n\n---\n\n'),
+    ].join('\n'));
+  }
+
+  if (!sections.length) {
     return prompt;
   }
 
-  const fileSections = selectedFileContexts.map((file) => (
-    `File: ${file.name}\nSize: ${formatBytes(file.size)}\nContent:\n${file.content}`
-  ));
-
   return [
-    'Use the uploaded file contents below as context for the user request.',
-    'If the request asks for analysis, summarize the important points, call out notable issues, and answer using evidence from the files.',
-    '',
-    fileSections.join('\n\n---\n\n'),
+    ...sections,
+    'Answer the user request using the provided evidence.',
     '',
     `User request: ${prompt}`,
-  ].join('\n');
+  ].join('\n\n');
 }
 
 function setFileControls(hasFiles) {
@@ -477,6 +528,206 @@ async function fetchModelCatalog() {
     appendStatus(`Ollama model catalog unavailable, using bundled list: ${error.message}`);
     return fetchJson('models.json');
   }
+}
+
+function setProjectStatus(text) {
+  projectAgentStatus.textContent = text;
+}
+
+function setProjectBusy(isBusy) {
+  [
+    loadProjectButton,
+    projectContextButton,
+    projectSearchButton,
+    projectReadButton,
+    projectRunButton,
+    projectClearButton,
+  ].forEach((button) => {
+    button.disabled = isBusy;
+  });
+}
+
+function updateProjectPreview() {
+  if (!projectContextEntries.length) {
+    projectAgentPreview.textContent = 'No project context attached.';
+    return;
+  }
+
+  projectAgentPreview.textContent = projectContextEntries
+    .map((entry, index) => `${index + 1}. ${entry.title}\n${previewText(entry.content, 700)}`)
+    .join('\n\n');
+}
+
+function projectQuery() {
+  return projectQueryInput.value.trim() || promptInput.value.trim() || 'security architecture implementation coding guardrails';
+}
+
+async function fetchProjectJson(url, payload) {
+  return fetchJson(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+function addProjectContextEntry(title, content) {
+  projectContextEntries.push({ title, content });
+  updateProjectPreview();
+}
+
+async function loadProjectDefaults() {
+  try {
+    const defaults = await fetchJson('/api/project/defaults');
+    if (defaults.default_project && !projectRootInput.value.trim()) {
+      projectRootInput.value = defaults.default_project;
+    }
+    activeProjectRoot = projectRootInput.value.trim();
+    setProjectStatus(`Allowed roots: ${(defaults.allowed_roots || []).join(', ')}`);
+  } catch (error) {
+    setProjectStatus(`Project agent unavailable: ${error.message}`);
+  }
+  updateProjectPreview();
+}
+
+async function loadProjectSummary() {
+  const projectRoot = projectRootInput.value.trim();
+  if (!projectRoot) {
+    setProjectStatus('Enter a project root first.');
+    return;
+  }
+
+  setProjectBusy(true);
+  try {
+    const summary = await fetchProjectJson('/api/project/summary', { project_root: projectRoot });
+    activeProjectRoot = summary.project_root;
+    projectRootInput.value = activeProjectRoot;
+    setProjectStatus(`Loaded ${activeProjectRoot}: ${summary.file_count} text files, ${summary.doc_count} guardrail docs.`);
+    addProjectContextEntry(
+      `Project summary: ${activeProjectRoot}`,
+      `Text files: ${summary.file_count}\nGuardrail docs: ${summary.doc_count}\nDocs:\n${(summary.docs || []).join('\n')}`
+    );
+  } catch (error) {
+    setProjectStatus(`Project load failed: ${error.message}`);
+  } finally {
+    setProjectBusy(false);
+  }
+}
+
+async function addProjectGuardrails() {
+  const projectRoot = projectRootInput.value.trim();
+  if (!projectRoot) {
+    setProjectStatus('Enter a project root first.');
+    return;
+  }
+
+  setProjectBusy(true);
+  try {
+    const payload = await fetchProjectJson('/api/project/context', {
+      project_root: projectRoot,
+      query: projectQuery(),
+      max_chunks: 8,
+    });
+    activeProjectRoot = payload.project_root;
+    const content = (payload.chunks || []).map((chunk) => (
+      `Path: ${chunk.path}${chunk.heading ? `\nHeading: ${chunk.heading}` : ''}\n${chunk.text}`
+    )).join('\n\n---\n\n');
+    addProjectContextEntry(`Guardrails for: ${payload.query || projectQuery()}`, content || 'No matching guardrails found.');
+    setProjectStatus(`Added ${(payload.chunks || []).length} guardrail chunks from ${activeProjectRoot}.`);
+  } catch (error) {
+    setProjectStatus(`Guardrail retrieval failed: ${error.message}`);
+  } finally {
+    setProjectBusy(false);
+  }
+}
+
+async function searchProject() {
+  const query = projectQueryInput.value.trim() || promptInput.value.trim();
+  if (!query) {
+    setProjectStatus('Enter a search query first.');
+    return;
+  }
+
+  setProjectBusy(true);
+  try {
+    const payload = await fetchProjectJson('/api/project/search', {
+      project_root: projectRootInput.value.trim(),
+      query,
+      max_results: 30,
+    });
+    const content = (payload.results || []).map((result) => (
+      `${result.path}:${result.line}: ${result.text}`
+    )).join('\n');
+    addProjectContextEntry(`Search: ${query}`, content || 'No matches.');
+    setProjectStatus(`Added ${(payload.results || []).length} search results.`);
+  } catch (error) {
+    setProjectStatus(`Search failed: ${error.message}`);
+  } finally {
+    setProjectBusy(false);
+  }
+}
+
+async function readProjectFile() {
+  const path = projectFileInput.value.trim();
+  if (!path) {
+    setProjectStatus('Enter a project-relative file path first.');
+    return;
+  }
+
+  setProjectBusy(true);
+  try {
+    const payload = await fetchProjectJson('/api/project/read', {
+      project_root: projectRootInput.value.trim(),
+      path,
+    });
+    addProjectContextEntry(
+      `File: ${payload.path}`,
+      `${payload.content}${payload.truncated ? '\n\n[truncated]' : ''}`
+    );
+    setProjectStatus(`Added file context: ${payload.path}`);
+  } catch (error) {
+    setProjectStatus(`Read failed: ${error.message}`);
+  } finally {
+    setProjectBusy(false);
+  }
+}
+
+async function runProjectTool() {
+  const command = projectCommandInput.value.trim();
+  if (!command) {
+    setProjectStatus('Enter an allowed tool command first.');
+    return;
+  }
+
+  setProjectBusy(true);
+  try {
+    const payload = await fetchProjectJson('/api/project/run', {
+      project_root: projectRootInput.value.trim(),
+      command,
+    });
+    const content = [
+      `Command: ${payload.command}`,
+      `Exit code: ${payload.exit_code}${payload.timed_out ? ' (timed out)' : ''}`,
+      `Duration: ${payload.duration_ms || 0} ms`,
+      '',
+      'STDOUT:',
+      payload.stdout || '[empty]',
+      '',
+      'STDERR:',
+      payload.stderr || '[empty]',
+    ].join('\n');
+    addProjectContextEntry(`Tool output: ${command}`, content);
+    setProjectStatus(`Tool finished: ${command} (exit ${payload.exit_code})`);
+  } catch (error) {
+    setProjectStatus(`Tool failed: ${error.message}`);
+  } finally {
+    setProjectBusy(false);
+  }
+}
+
+function clearProjectContext() {
+  projectContextEntries = [];
+  updateProjectPreview();
+  setProjectStatus('Project context cleared.');
 }
 
 function addModelOption(model) {
@@ -812,6 +1063,12 @@ promptForm.addEventListener('submit', submitPrompt);
 fileInput.addEventListener('change', previewSelectedFiles);
 analyzeFilesButton.addEventListener('click', analyzeSelectedFiles);
 clearFilesButton.addEventListener('click', clearSelectedFiles);
+loadProjectButton.addEventListener('click', loadProjectSummary);
+projectContextButton.addEventListener('click', addProjectGuardrails);
+projectSearchButton.addEventListener('click', searchProject);
+projectReadButton.addEventListener('click', readProjectFile);
+projectRunButton.addEventListener('click', runProjectTool);
+projectClearButton.addEventListener('click', clearProjectContext);
 modelTypeSelect.addEventListener('change', () => {
   currentModelType = modelTypeSelect.value;
   currentSize = '';
@@ -831,5 +1088,6 @@ sizeSelect.addEventListener('change', () => {
 });
 window.addEventListener('DOMContentLoaded', () => {
   populateModelTypeSelect();
+  loadProjectDefaults();
   fetchModels();
 });

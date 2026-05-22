@@ -25,6 +25,35 @@
 
     <main id="chat-container" aria-live="polite"></main>
 
+    <section id="project-agent-area" aria-label="Project Agent">
+      <div class="project-agent-grid">
+        <label>
+          Project
+          <input type="text" id="project-root-input" value="/home/foo/Workspace/OSMAP" />
+        </label>
+        <button type="button" id="load-project-btn">Load Project</button>
+        <label>
+          Query
+          <input type="text" id="project-query-input" placeholder="security guardrails, architecture, coding task..." />
+        </label>
+        <button type="button" id="project-context-btn">Add Guardrails</button>
+        <label>
+          File
+          <input type="text" id="project-file-input" placeholder="docs/SECURITY_MODEL.md" />
+        </label>
+        <button type="button" id="project-read-btn">Read File</button>
+        <label>
+          Tool
+          <input type="text" id="project-command-input" placeholder="cargo test" />
+        </label>
+        <button type="button" id="project-run-btn">Run Tool</button>
+        <button type="button" id="project-search-btn">Search</button>
+        <button type="button" id="project-clear-btn">Clear Context</button>
+      </div>
+      <div id="project-agent-status"></div>
+      <pre id="project-agent-preview"></pre>
+    </section>
+
     <div id="upload-area">
       <input type="file" id="file-input" multiple />
       <div class="upload-controls">

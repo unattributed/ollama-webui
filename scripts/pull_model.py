@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
+import subprocess
 import time
 from html.parser import HTMLParser
 from pathlib import Path
@@ -34,6 +36,64 @@ PULL_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 STATIC_ASSET_EXTENSIONS = {".css", ".html", ".ico", ".js", ".json"}
 UPDATED_AGE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(minute|hour|day|week|month|year)s?\s+ago")
 MODEL_CAPABILITY_TAGS = {"audio", "embedding", "thinking", "tools", "vision"}
+DEFAULT_PROJECT_ROOT = Path("/home/foo/Workspace/OSMAP")
+PROJECT_ROOTS_ENV = os.environ.get("OLLAMA_WEBUI_PROJECT_ROOTS", str(Path.home() / "Workspace"))
+PROJECT_ROOTS = [Path(part).expanduser().resolve() for part in PROJECT_ROOTS_ENV.split(os.pathsep) if part.strip()]
+PROJECT_EXCLUDED_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "dist",
+    "node_modules",
+    "target",
+    "vendor",
+}
+PROJECT_TEXT_EXTENSIONS = {
+    ".c",
+    ".conf",
+    ".cpp",
+    ".cs",
+    ".css",
+    ".csv",
+    ".go",
+    ".h",
+    ".html",
+    ".ini",
+    ".java",
+    ".js",
+    ".json",
+    ".jsx",
+    ".lock",
+    ".md",
+    ".php",
+    ".py",
+    ".rb",
+    ".rs",
+    ".sh",
+    ".sql",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".txt",
+    ".xml",
+    ".yaml",
+    ".yml",
+}
+PROJECT_DOC_EXTENSIONS = {".md", ".txt"}
+MAX_PROJECT_FILE_BYTES = 256 * 1024
+MAX_PROJECT_SEARCH_FILE_BYTES = 512 * 1024
+MAX_PROJECT_CONTEXT_CHARS = 18000
+MAX_PROJECT_CHUNK_CHARS = 2200
+MAX_PROJECT_COMMAND_OUTPUT_CHARS = 30000
+PROJECT_COMMAND_TIMEOUT_SECONDS = 120
+ALLOWED_CARGO_SUBCOMMANDS = {"build", "check", "clippy", "fmt", "metadata", "test"}
+ALLOWED_GIT_SUBCOMMANDS = {"diff", "log", "show", "status"}
+ALLOWED_PYTHON_MODULES = {"compileall", "mypy", "py_compile", "pytest", "ruff", "unittest"}
+ALLOWED_DIRECT_COMMANDS = {"cargo", "git", "mypy", "pytest", "ruff", "rustc"}
 catalog_cache: dict[str, Any] = {"expires_at": 0.0, "models": []}
 active_pulls: dict[str, requests.Response] = {}
 cancelled_pulls: set[str] = set()
@@ -320,6 +380,252 @@ def proxy_ollama_json(path: str) -> tuple[dict[str, Any], int]:
     return payload, response.status_code
 
 
+def is_relative_to(path: Path, parent: Path) -> bool:
+    """Return True when path is under parent."""
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+
+    return True
+
+
+def allowed_project_root(path_value: str | None) -> Path | None:
+    """Resolve a user-supplied project path if it is inside an allowed root."""
+    if not path_value:
+        return None
+
+    try:
+        project_root = Path(path_value).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return None
+
+    if not project_root.is_dir():
+        return None
+
+    return project_root if any(is_relative_to(project_root, root) for root in PROJECT_ROOTS) else None
+
+
+def project_file_path(project_root: Path, relative_path: str | None) -> Path | None:
+    """Resolve a relative file path under a validated project root."""
+    if not relative_path:
+        return None
+
+    try:
+        file_path = (project_root / relative_path).resolve()
+    except (OSError, RuntimeError):
+        return None
+
+    if not is_relative_to(file_path, project_root) or not file_path.is_file():
+        return None
+
+    return file_path
+
+
+def is_project_text_file(path: Path) -> bool:
+    """Return True for project files that are safe and useful to read as text."""
+    return path.suffix.lower() in PROJECT_TEXT_EXTENSIONS or path.name in {"Dockerfile", "Makefile"}
+
+
+def should_skip_project_dir(path: Path) -> bool:
+    """Return True for directories that should not be searched or read."""
+    return path.name in PROJECT_EXCLUDED_DIRS or path.name.startswith(".") and path.name not in {".github"}
+
+
+def iter_project_files(project_root: Path, docs_only: bool = False) -> Iterator[Path]:
+    """Yield bounded text files under a project root."""
+    for directory, dirnames, filenames in os.walk(project_root):
+        directory_path = Path(directory)
+        dirnames[:] = [name for name in dirnames if not should_skip_project_dir(directory_path / name)]
+
+        for filename in filenames:
+            path = directory_path / filename
+            if not is_project_text_file(path):
+                continue
+            if docs_only:
+                relative = path.relative_to(project_root)
+                is_doc_file = relative.parts and relative.parts[0] == "docs" and path.suffix.lower() in PROJECT_DOC_EXTENSIONS
+                is_root_doc = len(relative.parts) == 1 and path.name in {"README.md", "SECURITY.md", "CONTRIBUTING.md"}
+                if not is_doc_file and not is_root_doc:
+                    continue
+            try:
+                if path.stat().st_size > MAX_PROJECT_SEARCH_FILE_BYTES:
+                    continue
+            except OSError:
+                continue
+            yield path
+
+
+def read_project_text(path: Path, max_chars: int = MAX_PROJECT_FILE_BYTES) -> tuple[str, bool]:
+    """Read project text with replacement and a truncation flag."""
+    raw = path.read_bytes()
+    truncated = len(raw) > max_chars
+    text = raw[:max_chars].decode("utf-8", errors="replace")
+    return text, truncated
+
+
+def query_terms(query: str) -> list[str]:
+    """Return useful lowercase search terms."""
+    stop_words = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "for",
+        "in",
+        "is",
+        "of",
+        "on",
+        "or",
+        "the",
+        "to",
+        "with",
+    }
+    terms = re.findall(r"[a-zA-Z0-9_.:-]+", query.lower())
+    return [term for term in terms if len(term) > 2 and term not in stop_words]
+
+
+def split_context_chunks(project_root: Path, path: Path, text: str) -> list[dict[str, Any]]:
+    """Split text into heading-aware chunks."""
+    relative = str(path.relative_to(project_root))
+    chunks: list[dict[str, Any]] = []
+    current_heading = ""
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_lines
+        content = "\n".join(current_lines).strip()
+        if not content:
+            current_lines = []
+            return
+        while len(content) > MAX_PROJECT_CHUNK_CHARS:
+            chunks.append({"path": relative, "heading": current_heading, "text": content[:MAX_PROJECT_CHUNK_CHARS]})
+            content = content[MAX_PROJECT_CHUNK_CHARS:]
+        chunks.append({"path": relative, "heading": current_heading, "text": content})
+        current_lines = []
+
+    for line in text.splitlines():
+        if path.suffix.lower() == ".md" and line.startswith("#"):
+            flush()
+            current_heading = line.strip("# ").strip()
+        current_lines.append(line)
+        if sum(len(part) + 1 for part in current_lines) >= MAX_PROJECT_CHUNK_CHARS:
+            flush()
+
+    flush()
+    return chunks
+
+
+def score_context_chunk(chunk: dict[str, Any], terms: list[str]) -> int:
+    """Score a context chunk using simple local lexical matching."""
+    if not terms:
+        return 1
+
+    path = str(chunk.get("path", "")).lower()
+    heading = str(chunk.get("heading", "")).lower()
+    text = str(chunk.get("text", "")).lower()
+    score = 0
+    for term in terms:
+        score += path.count(term) * 5
+        score += heading.count(term) * 4
+        score += text.count(term)
+    return score
+
+
+def project_context(project_root: Path, query: str, max_chunks: int = 8) -> list[dict[str, Any]]:
+    """Return the most relevant project guardrail chunks."""
+    terms = query_terms(query or "security architecture implementation guardrails coding requirements")
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for path in iter_project_files(project_root, docs_only=True):
+        try:
+            text, _ = read_project_text(path, MAX_PROJECT_SEARCH_FILE_BYTES)
+        except OSError:
+            continue
+        for chunk in split_context_chunks(project_root, path, text):
+            score = score_context_chunk(chunk, terms)
+            if score > 0:
+                scored.append((score, chunk))
+
+    scored.sort(key=lambda item: (-item[0], str(item[1].get("path", "")), str(item[1].get("heading", ""))))
+    chunks = [chunk | {"score": score} for score, chunk in scored[:max_chunks]]
+    total_chars = 0
+    bounded_chunks = []
+    for chunk in chunks:
+        text = str(chunk.get("text", ""))
+        remaining = MAX_PROJECT_CONTEXT_CHARS - total_chars
+        if remaining <= 0:
+            break
+        if len(text) > remaining:
+            chunk = {**chunk, "text": text[:remaining], "truncated": True}
+        bounded_chunks.append(chunk)
+        total_chars += len(str(chunk.get("text", "")))
+    return bounded_chunks
+
+
+def search_project(project_root: Path, query: str, max_results: int = 30) -> list[dict[str, Any]]:
+    """Search project text files for query terms."""
+    terms = query_terms(query)
+    if not terms:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for path in iter_project_files(project_root):
+        try:
+            text, _ = read_project_text(path, MAX_PROJECT_SEARCH_FILE_BYTES)
+        except OSError:
+            continue
+        relative = str(path.relative_to(project_root))
+        for number, line in enumerate(text.splitlines(), start=1):
+            lowered = line.lower()
+            if all(term in lowered for term in terms):
+                results.append({"path": relative, "line": number, "text": line.strip()[:300]})
+                if len(results) >= max_results:
+                    return results
+    return results
+
+
+def validate_project_command(command: str) -> tuple[list[str] | None, str | None]:
+    """Return argv for an allowed local development command."""
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return None, f"invalid command: {exc}"
+
+    if not argv:
+        return None, "missing command"
+
+    executable = Path(argv[0]).name
+    if executable in {"python", "python3"}:
+        if len(argv) < 3 or argv[1] != "-m" or argv[2] not in ALLOWED_PYTHON_MODULES:
+            return None, "python commands must use -m with an allowed module"
+        return [executable, *argv[1:]], None
+
+    if executable == "cargo":
+        if len(argv) < 2 or argv[1] not in ALLOWED_CARGO_SUBCOMMANDS:
+            return None, "cargo command must use an allowed subcommand"
+        return [executable, *argv[1:]], None
+
+    if executable == "git":
+        if len(argv) < 2 or argv[1] not in ALLOWED_GIT_SUBCOMMANDS:
+            return None, "git command must be read-only"
+        return [executable, *argv[1:]], None
+
+    if executable not in ALLOWED_DIRECT_COMMANDS:
+        return None, f"command is not allowed: {executable}"
+
+    return [executable, *argv[1:]], None
+
+
+def project_command_env() -> dict[str, str]:
+    """Return a command environment with common user tool directories on PATH."""
+    env = os.environ.copy()
+    extra_paths = [str(Path.home() / ".cargo" / "bin"), str(Path.home() / ".local" / "bin")]
+    existing_path = env.get("PATH", "")
+    env["PATH"] = os.pathsep.join([*extra_paths, existing_path])
+    return env
+
+
 @app.get("/")
 def serve_index() -> Response:
     """Serve the main Web UI."""
@@ -350,6 +656,146 @@ def api_tags() -> tuple[Response, int]:
 def api_models() -> Response:
     """Return the pullable Ollama model catalog."""
     return jsonify(model_catalog())
+
+
+@app.get("/api/project/defaults")
+def api_project_defaults() -> Response:
+    """Return project-agent defaults and allowed tool names."""
+    default_root = DEFAULT_PROJECT_ROOT if DEFAULT_PROJECT_ROOT.is_dir() else (PROJECT_ROOTS[0] if PROJECT_ROOTS else Path.home())
+    return jsonify(
+        {
+            "allowed_roots": [str(root) for root in PROJECT_ROOTS],
+            "default_project": str(default_root),
+            "allowed_tools": {
+                "cargo": sorted(ALLOWED_CARGO_SUBCOMMANDS),
+                "git": sorted(ALLOWED_GIT_SUBCOMMANDS),
+                "python_modules": sorted(ALLOWED_PYTHON_MODULES),
+                "direct": sorted(ALLOWED_DIRECT_COMMANDS - {"cargo", "git"}),
+            },
+        }
+    )
+
+
+@app.post("/api/project/summary")
+def api_project_summary() -> tuple[Response, int]:
+    """Return a bounded project summary for the Project Agent panel."""
+    body = request.get_json(silent=True) or {}
+    project_root = allowed_project_root(str(body.get("project_root", "")))
+    if project_root is None:
+        return jsonify({"error": "project_root must be an existing directory under an allowed workspace root"}), 400
+
+    docs = []
+    file_count = 0
+    doc_count = 0
+    for path in iter_project_files(project_root):
+        file_count += 1
+        relative = path.relative_to(project_root)
+        if relative.parts and (relative.parts[0] == "docs" or path.name in {"README.md", "SECURITY.md", "CONTRIBUTING.md"}):
+            doc_count += 1
+            if len(docs) < 40:
+                docs.append(str(relative))
+
+    return jsonify({"project_root": str(project_root), "file_count": file_count, "doc_count": doc_count, "docs": docs}), 200
+
+
+@app.post("/api/project/context")
+def api_project_context() -> tuple[Response, int]:
+    """Return relevant guardrail context from project documentation."""
+    body = request.get_json(silent=True) or {}
+    project_root = allowed_project_root(str(body.get("project_root", "")))
+    if project_root is None:
+        return jsonify({"error": "project_root must be an existing directory under an allowed workspace root"}), 400
+
+    query = str(body.get("query", "")).strip()
+    max_chunks = min(max(int(body.get("max_chunks", 8) or 8), 1), 12)
+    chunks = project_context(project_root, query, max_chunks=max_chunks)
+    return jsonify({"project_root": str(project_root), "query": query, "chunks": chunks}), 200
+
+
+@app.post("/api/project/search")
+def api_project_search() -> tuple[Response, int]:
+    """Search text files inside a validated project root."""
+    body = request.get_json(silent=True) or {}
+    project_root = allowed_project_root(str(body.get("project_root", "")))
+    if project_root is None:
+        return jsonify({"error": "project_root must be an existing directory under an allowed workspace root"}), 400
+
+    query = str(body.get("query", "")).strip()
+    if not query:
+        return jsonify({"error": "missing query"}), 400
+
+    max_results = min(max(int(body.get("max_results", 30) or 30), 1), 80)
+    return jsonify({"project_root": str(project_root), "query": query, "results": search_project(project_root, query, max_results)}), 200
+
+
+@app.post("/api/project/read")
+def api_project_read() -> tuple[Response, int]:
+    """Read one bounded text file under a validated project root."""
+    body = request.get_json(silent=True) or {}
+    project_root = allowed_project_root(str(body.get("project_root", "")))
+    if project_root is None:
+        return jsonify({"error": "project_root must be an existing directory under an allowed workspace root"}), 400
+
+    path = project_file_path(project_root, str(body.get("path", "")))
+    if path is None or not is_project_text_file(path):
+        return jsonify({"error": "path must be a readable text file under the project root"}), 400
+
+    try:
+        text, truncated = read_project_text(path)
+    except OSError as exc:
+        return jsonify({"error": f"unable to read file: {exc}"}), 400
+
+    return jsonify({"path": str(path.relative_to(project_root)), "content": text, "truncated": truncated}), 200
+
+
+@app.post("/api/project/run")
+def api_project_run() -> tuple[Response, int]:
+    """Run a bounded allowlisted development command in a project root."""
+    body = request.get_json(silent=True) or {}
+    project_root = allowed_project_root(str(body.get("project_root", "")))
+    if project_root is None:
+        return jsonify({"error": "project_root must be an existing directory under an allowed workspace root"}), 400
+
+    command = str(body.get("command", "")).strip()
+    argv, error = validate_project_command(command)
+    if argv is None:
+        return jsonify({"error": error or "command is not allowed"}), 400
+
+    started_at = time.monotonic()
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=project_root,
+            env=project_command_env(),
+            capture_output=True,
+            text=True,
+            timeout=PROJECT_COMMAND_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except FileNotFoundError:
+        return jsonify({"error": f"command not found on this system: {argv[0]}"}), 400
+    except subprocess.TimeoutExpired as exc:
+        stdout = (exc.stdout or "")[-MAX_PROJECT_COMMAND_OUTPUT_CHARS:]
+        stderr = (exc.stderr or "")[-MAX_PROJECT_COMMAND_OUTPUT_CHARS:]
+        return jsonify({"command": command, "exit_code": None, "timed_out": True, "stdout": stdout, "stderr": stderr}), 200
+
+    duration_ms = round((time.monotonic() - started_at) * 1000)
+    stdout = completed.stdout[-MAX_PROJECT_COMMAND_OUTPUT_CHARS:]
+    stderr = completed.stderr[-MAX_PROJECT_COMMAND_OUTPUT_CHARS:]
+    return (
+        jsonify(
+            {
+                "command": command,
+                "argv": argv,
+                "exit_code": completed.returncode,
+                "duration_ms": duration_ms,
+                "stdout": stdout,
+                "stderr": stderr,
+                "timed_out": False,
+            }
+        ),
+        200,
+    )
 
 
 @app.post("/api/generate")

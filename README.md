@@ -13,6 +13,7 @@ A lightweight local Web UI for chatting with models served by Ollama. The Python
 - Streaming model downloads through Ollama `/api/pull`
 - Cancel button for an active model pull
 - Text-like file analysis through prompt context
+- Project Agent panel for scoped local project guardrails, file search/read, and allowlisted development tool execution
 - Same-origin Flask proxy to avoid direct browser CORS issues
 
 ## Requirements
@@ -103,6 +104,19 @@ While a pull is active, the Web UI changes the pull button to `Cancel Pull`. Can
 Use `Upload File(s)` to select text-like files such as Markdown, plain text, code, CSV, JSON, XML, YAML, or logs. The browser reads supported files locally and adds their contents to the next prompt sent to Ollama.
 
 Click `Analyze Files` to send a default analysis request, or type your own question and press `Send`. Large files are skipped or truncated before being added to the prompt so local models are not overloaded.
+
+## Project Agent
+
+Use the Project Agent panel to give Ollama bounded local project context before asking for coding help. The default project is `/home/foo/Workspace/OSMAP` when it exists.
+
+- `Load Project` validates the project root and summarizes available text files and docs.
+- `Add Guardrails` retrieves relevant chunks from `docs/**/*.md` plus root project docs such as `README.md` and `SECURITY.md`.
+- `Search` finds matching lines in text-like project files.
+- `Read File` attaches one project-relative text file to the next prompt.
+- `Run Tool` executes an allowlisted local development command under the project root and attaches stdout/stderr to the next prompt.
+- `Clear Context` removes accumulated project context from future prompts.
+
+Project access is restricted to directories under `OLLAMA_WEBUI_PROJECT_ROOTS`, which defaults to `~/Workspace`. The helper skips large files and directories such as `.git`, `.venv`, `target`, `node_modules`, and caches. Tool execution does not use a shell. The current allowlist covers read-only Git commands, common Cargo subcommands, `rustc`, `pytest`, `ruff`, `mypy`, and `python -m` modules such as `pytest`, `py_compile`, `compileall`, `ruff`, `mypy`, and `unittest`.
 
 ## Smoke Test
 
