@@ -35,20 +35,6 @@
     "sizes": ["128b"]
   },
   {
-    "name": "deepseek-v4-flash",
-    "description": "DeepSeek-V4-Flash is a preview of the DeepSeek-V4 series, a Mixture-of-Experts model with 284B total parameters and 13B activated, built for efficient reasoning across a 1M-token context window.",
-    "updated": "3 weeks ago",
-    "capabilities": ["tools", "thinking"],
-    "sizes": []
-  },
-  {
-    "name": "deepseek-v4-pro",
-    "description": "DeepSeek-V4-Pro is a frontier Mixture-of-Experts model with a 1M-token context window and three reasoning modes.",
-    "updated": "3 weeks ago",
-    "capabilities": ["tools", "thinking"],
-    "sizes": []
-  },
-  {
     "name": "laguna-xs.2",
     "description": "Laguna XS.2 is a 33B total parameter Mixture-of-Experts model with 3B activated parameters per token designed for agentic coding and long-horizon work on a local machine.",
     "updated": "3 weeks ago",
@@ -61,13 +47,6 @@
     "updated": "3 weeks ago",
     "capabilities": ["vision", "tools", "thinking", "audio"],
     "sizes": ["33b"]
-  },
-  {
-    "name": "glm-5.1",
-    "description": "GLM-5.1 is our next-generation flagship model for agentic engineering, with significantly stronger coding capabilities than its predecessor. It achieves state-of-the-art performance on SWE-Bench Pro and leads GLM-5 by a wide margin.",
-    "updated": "1 month ago",
-    "capabilities": ["tools", "thinking"],
-    "sizes": []
   },
   {
     "name": "kimi-k2.6",

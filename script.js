@@ -55,7 +55,6 @@ const MODEL_TYPE_OPTIONS = [
   { value: 'thinking', label: 'Thinking' },
   { value: 'vision', label: 'Vision' },
   { value: 'audio', label: 'Audio' },
-  { value: 'cloud', label: 'Cloud' },
   { value: 'embedding', label: 'Embedding' },
 ];
 const CODE_DEVELOPMENT_TERMS = [
@@ -283,27 +282,15 @@ function isModelInstalled(modelName, size = '') {
   return installedModels.has(modelReference) || (!size && installedModels.has(`${modelName}:latest`));
 }
 
-function isCloudOnlyModel(modelName) {
-  const model = modelsMap[modelName];
-  if (!model || isModelInstalled(modelName)) {
-    return false;
-  }
-
-  return modelCapabilities(model).includes('cloud') && getModelSizes(modelName).length === 0;
-}
-
 function updateSelectedModelControls() {
   const hasModels = modelSelect.options.length > 0;
-  const cloudOnly = isCloudOnlyModel(currentModel);
   modelSelect.disabled = Boolean(currentPull) || !hasModels;
 
   if (!currentPull) {
-    pullModelButton.disabled = !hasModels || cloudOnly;
-    pullModelButton.title = cloudOnly ? 'Cloud-only catalog entry; no local Ollama manifest is available to pull.' : '';
+    pullModelButton.disabled = !hasModels;
   }
 
-  submitButton.disabled = !hasModels || cloudOnly;
-  submitButton.title = cloudOnly ? 'Cloud-only catalog entry; local chat generation is not available.' : '';
+  submitButton.disabled = !hasModels;
 }
 
 function fileExtension(fileName) {
@@ -405,7 +392,6 @@ function parseGenerateLine(line) {
 function populateSizeSelect(modelName) {
   const sizes = getModelSizes(modelName);
   const preferredSize = sizes.includes(currentSize) ? currentSize : sizes[0] || '';
-  const cloudOnly = isCloudOnlyModel(modelName);
 
   sizeSelect.replaceChildren();
   if (sizes.length) {
@@ -418,7 +404,7 @@ function populateSizeSelect(modelName) {
   } else {
     const option = document.createElement('option');
     option.value = '';
-    option.textContent = cloudOnly ? 'cloud only' : 'default';
+    option.textContent = 'default';
     sizeSelect.appendChild(option);
   }
 
@@ -447,20 +433,14 @@ function setModelDescription(modelName) {
   }
   if (Array.isArray(model.sizes) && model.sizes.length) {
     details.push(`Sizes: ${model.sizes.join(', ')}`);
-  } else if (isCloudOnlyModel(modelName)) {
-    details.push('Local pull: unavailable for this cloud-only catalog entry');
   }
 
   const installed = document.createElement('div');
   const selectedSize = sizeSelect.value;
   const modelReference = selectedModelReference();
-  if (isCloudOnlyModel(modelName)) {
-    installed.textContent = 'Local status: no local Ollama manifest is available';
-  } else {
-    installed.textContent = isModelInstalled(modelName, selectedSize)
-      ? 'Local status: installed'
-      : `Local status: ${modelReference} not detected locally`;
-  }
+  installed.textContent = isModelInstalled(modelName, selectedSize)
+    ? 'Local status: installed'
+    : `Local status: ${modelReference} not detected locally`;
 
   const detailNodes = details.map((detail) => {
     const node = document.createElement('div');
@@ -584,10 +564,6 @@ function pullSelectedModel() {
 
   const modelName = modelSelect.value;
   const model = selectedModelReference();
-  if (isCloudOnlyModel(modelName)) {
-    appendStatus(`${modelName} is listed as a cloud-only Ollama catalog entry and cannot be pulled into the local Ollama runtime.`);
-    return;
-  }
   if (!model) {
     appendStatus('No model selected.');
     return;
@@ -684,10 +660,6 @@ async function submitPrompt(event) {
 
   const prompt = promptInput.value.trim();
   const model = selectedModelReference();
-  if (isCloudOnlyModel(currentModel)) {
-    appendStatus(`${currentModel} is a cloud-only catalog entry and is not available through this local Ollama chat proxy.`);
-    return;
-  }
   if (!prompt || !model) {
     return;
   }

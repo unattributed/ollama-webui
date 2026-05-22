@@ -6,7 +6,7 @@ A lightweight local Web UI for chatting with models served by Ollama. The Python
 
 - Local browser UI for Ollama models
 - Newest-first model selector from Ollama's public model library, with `models.json` as a fallback
-- Model type filter with `Any`, `Code Development`, and Ollama capability types such as `Tools`, `Thinking`, `Vision`, `Audio`, `Cloud`, and `Embedding`
+- Model type filter with `Any`, `Code Development`, and Ollama capability types such as `Tools`, `Thinking`, `Vision`, `Audio`, and `Embedding`
 - Contextual size selector so pulls and chats use a specific available model tag
 - Local installed model detection through Ollama `/api/tags`
 - Streaming prompt responses through Ollama `/api/generate`
@@ -86,7 +86,7 @@ http://127.0.0.1:11435/
 
 Do not open `index.html` directly with a `file://` URL. Use the Flask helper URL so the UI, pull endpoint, and Ollama generation proxy all share the same local origin.
 
-The model selector defaults to `Any`, which shows every catalog model the helper can read from Ollama, sorted by the newest `Updated` timestamp exposed by the site. `Code Development` is a local convenience filter, not an official Ollama category; it matches coding-oriented model names and descriptions while the other type filters map directly to Ollama capability tags where available. Cloud-only catalog entries remain visible, but the Web UI disables local pull and chat controls for entries that do not expose a local Ollama manifest.
+The model selector defaults to `Any`, which shows locally pullable catalog models the helper can read from Ollama, sorted by the newest `Updated` timestamp exposed by the site. `Code Development` is a local convenience filter, not an official Ollama category; it matches coding-oriented model names and descriptions while the other type filters map directly to Ollama capability tags where available. Cloud-only catalog entries are excluded because this Web UI is built around local Ollama pull and chat workflows.
 
 ## Pull a Model
 

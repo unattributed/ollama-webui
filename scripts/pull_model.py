@@ -33,7 +33,7 @@ MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PULL_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,80}$")
 STATIC_ASSET_EXTENSIONS = {".css", ".html", ".ico", ".js", ".json"}
 UPDATED_AGE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(minute|hour|day|week|month|year)s?\s+ago")
-MODEL_CAPABILITY_TAGS = {"audio", "cloud", "embedding", "thinking", "tools", "vision"}
+MODEL_CAPABILITY_TAGS = {"audio", "embedding", "thinking", "tools", "vision"}
 catalog_cache: dict[str, Any] = {"expires_at": 0.0, "models": []}
 active_pulls: dict[str, requests.Response] = {}
 cancelled_pulls: set[str] = set()
@@ -131,9 +131,14 @@ class OllamaLibraryParser(HTMLParser):
 
         name = str(self._current.get("name", "")).strip()
         if name and name not in self._seen_names:
-            self._seen_names.add(name)
             capabilities = self._current.get("capabilities", [])
+            sizes = self._current.get("sizes", [])
             badges = [str(badge).strip().lower() for badge in self._current.get("badges", [])]
+            if "cloud" in badges and not sizes:
+                self._current = None
+                return
+
+            self._seen_names.add(name)
             self._current["capabilities"] = [
                 *capabilities,
                 *(badge for badge in badges if badge in MODEL_CAPABILITY_TAGS and badge not in capabilities),
