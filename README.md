@@ -1,6 +1,25 @@
 # Ollama Web UI
 
-A lightweight local Web UI for chatting with models served by Ollama. The Python helper serves the static frontend, proxies browser requests to the local Ollama API, streams model pull progress, and streams generation responses back to the browser.
+Ollama Web UI is an intentionally insecure local lab application for chatting with models served by Ollama.
+
+This project is not a secure product, not a hardened assistant, and not a production-ready AI coding environment. It has no intentional focus on security. It is deliberately useful as a weak, inspectable browser-based LLM target for the AI Browser Security Test Suite in the same spirit that OWASP Juice Shop is useful as an intentionally vulnerable web application.
+
+Use it only on a machine and projects you control. The Project Agent feature can read local files under configured workspace roots and run allowlisted local development tools. That behavior is dangerous by design if pointed at real sensitive repositories or if exposed beyond localhost.
+
+The Python helper serves the static frontend, proxies browser requests to the local Ollama API, streams model pull progress, streams generation responses back to the browser, and exposes intentionally simple local project helper endpoints for testing.
+
+## Insecure Lab Warning
+
+This application deliberately does not provide production security controls:
+
+- no authentication or multi-user isolation
+- no hardened browser sandbox
+- no protection against prompt injection or model manipulation
+- no guarantee that uploaded files, local project files, or tool output are handled safely
+- no robust secret detection, redaction, policy engine, or audit boundary
+- no safe-by-default authorization model for local file and tool access beyond simple local path and command allowlists
+
+The expected use case is local defensive research, browser-AI testing, and controlled demonstrations by the AI Browser Security Test Suite. Do not bind it to public interfaces, do not use it with production secrets, and do not treat model responses as security decisions.
 
 ## Features
 
@@ -108,6 +127,12 @@ Click `Analyze Files` to send a default analysis request, or type your own quest
 ## Project Agent
 
 Use the Project Agent panel to give Ollama bounded local project context before asking for coding help. The default project is `/home/foo/Workspace/OSMAP` when it exists.
+
+This is a lab feature, not a secure coding agent. Treat every project file,
+tool result, and generated answer as untrusted. The feature exists so the test
+suite can demonstrate how local project evidence enters an LLM context and why
+real systems need stronger isolation, policy controls, redaction, approvals,
+and auditing.
 
 - `Load Project` validates the project root and summarizes available text files and docs.
 - `Add Guardrails` retrieves relevant chunks from `docs/**/*.md` plus root project docs such as `README.md` and `SECURITY.md`.
