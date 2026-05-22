@@ -132,14 +132,74 @@ function responseErrorMessage(response, text) {
 function appendMessage(role, text) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
-  div.textContent = text;
+  const content = document.createElement('div');
+  content.className = 'message-text';
+
+  const copyButton = document.createElement('button');
+  copyButton.type = 'button';
+  copyButton.className = 'message-copy-button';
+  copyButton.textContent = 'Copy';
+  copyButton.title = 'Copy message';
+  copyButton.setAttribute('aria-label', 'Copy message');
+  copyButton.addEventListener('click', () => copyMessageText(copyButton, div));
+
+  div.append(content, copyButton);
   chatContainer.appendChild(div);
+  setMessageText(div, text);
   chatContainer.scrollTop = chatContainer.scrollHeight;
   return div;
 }
 
 function appendStatus(text) {
   return appendMessage('status', text);
+}
+
+function messageTextElement(message) {
+  return message.querySelector('.message-text') || message;
+}
+
+function setMessageText(message, text) {
+  const normalized = String(text || '');
+  messageTextElement(message).textContent = normalized;
+  message.dataset.copyText = normalized;
+}
+
+function appendMessageText(message, text) {
+  setMessageText(message, `${messageTextElement(message).textContent}${text}`);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+async function copyMessageText(button, message) {
+  const originalLabel = button.textContent;
+  const text = message.dataset.copyText || messageTextElement(message).textContent;
+
+  try {
+    await copyTextToClipboard(text);
+    button.textContent = 'Copied';
+  } catch {
+    button.textContent = 'Failed';
+  }
+
+  window.setTimeout(() => {
+    button.textContent = originalLabel;
+  }, 1400);
 }
 
 function createPullId() {
@@ -423,8 +483,7 @@ function finishPull(statusText = null) {
   if (currentPull) {
     currentPull.eventSource.close();
     if (statusText) {
-      currentPull.statusMessage.textContent += `\n${statusText}`;
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+      appendMessageText(currentPull.statusMessage, `\n${statusText}`);
     }
   }
 
@@ -846,8 +905,7 @@ function pullSelectedModel() {
       return;
     }
     currentPull.lastLine = line;
-    statusMessage.textContent += `\n${line}`;
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    appendMessageText(statusMessage, `\n${line}`);
 
     if (line.toLowerCase().startsWith('success:')) {
       installedModels.add(model);
@@ -879,8 +937,7 @@ async function cancelCurrentPull() {
   const pull = currentPull;
   pull.cancelling = true;
   pullModelButton.disabled = true;
-  pull.statusMessage.textContent += '\nCancel requested.';
-  chatContainer.scrollTop = chatContainer.scrollHeight;
+  appendMessageText(pull.statusMessage, '\nCancel requested.');
 
   try {
     const response = await fetch('/api/pull_model/cancel', {
@@ -894,8 +951,7 @@ async function cancelCurrentPull() {
     }
   } catch (error) {
     if (currentPull === pull) {
-      pull.statusMessage.textContent += `\nCancel request failed: ${error.message}`;
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+      appendMessageText(pull.statusMessage, `\nCancel request failed: ${error.message}`);
       pullModelButton.disabled = false;
     }
     return;
@@ -955,7 +1011,7 @@ async function submitPrompt(event) {
       }
       if (data.response) {
         fullText += data.response;
-        aiMessage.textContent = fullText;
+        setMessageText(aiMessage, fullText);
         chatContainer.scrollTop = chatContainer.scrollHeight;
       }
     };
@@ -979,10 +1035,10 @@ async function submitPrompt(event) {
     handleLine(buffer);
 
     if (!fullText) {
-      aiMessage.textContent = '[no response returned]';
+      setMessageText(aiMessage, '[no response returned]');
     }
   } catch (error) {
-    aiMessage.textContent = `Error: ${error.message}`;
+    setMessageText(aiMessage, `Error: ${error.message}`);
   } finally {
     promptInput.disabled = false;
     submitButton.disabled = false;
