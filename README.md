@@ -33,6 +33,7 @@ The expected use case is local defensive research, browser-AI testing, and contr
 - Cancel button for an active model pull
 - Text-like file analysis through prompt context
 - Project Agent panel for scoped local project guardrails, file search/read, and allowlisted development tool execution
+- Browser-Safe AI target scenario contract for toolkit traceability
 - Same-origin Flask proxy to avoid direct browser CORS issues
 
 ## Requirements
@@ -123,6 +124,52 @@ While a pull is active, the Web UI changes the pull button to `Cancel Pull`. Can
 Use `Upload File(s)` to select text-like files such as Markdown, plain text, code, CSV, JSON, XML, YAML, or logs. The browser reads supported files locally and adds their contents to the next prompt sent to Ollama.
 
 Click `Analyze Files` to send a default analysis request, or type your own question and press `Send`. Large files are skipped or truncated before being added to the prompt so local models are not overloaded.
+
+
+## Browser-Safe AI Target Scenario Contract
+
+This intentionally vulnerable app now publishes a controlled target scenario contract for the Browser-Safe AI Systems toolkit.
+
+Machine-readable contract:
+
+```text
+docs/target-scenario-contract-v0.2.json
+```
+
+Human-readable contract:
+
+```text
+docs/target-scenario-contract-v0.2.md
+```
+
+Local helper endpoint:
+
+```text
+http://127.0.0.1:11435/api/browser-safe/target-contract
+```
+
+The contract defines which local lab surfaces are active, which tests are allowed, which tests are out of scope, which evidence artifacts are expected, and which article-series parts the scenario supports.
+
+Current scenario ids:
+
+```text
+chat.basic_prompt
+file_upload.text_context
+project_agent.guardrail_context
+project_agent.search
+project_agent.read_file
+project_agent.run_tool
+model.catalog_filter
+```
+
+Validate the contract before treating it as a toolkit target source:
+
+```bash
+cd /home/foo/Workspace/ollama-webui
+python scripts/validate_target_contract.py
+```
+
+The contract does not make this application safer. It makes the deliberately weak lab target more explicit and prevents the toolkit from claiming coverage that the target has not declared.
 
 ## Project Agent
 
