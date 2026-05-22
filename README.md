@@ -86,7 +86,7 @@ http://127.0.0.1:11435/
 
 Do not open `index.html` directly with a `file://` URL. Use the Flask helper URL so the UI, pull endpoint, and Ollama generation proxy all share the same local origin.
 
-The model selector defaults to `Any`, which shows every catalog model the helper can read from Ollama, sorted by the newest `Updated` timestamp exposed by the site. `Code Development` is a local convenience filter, not an official Ollama category; it matches coding-oriented model names and descriptions while the other type filters map directly to Ollama capability tags where available.
+The model selector defaults to `Any`, which shows every catalog model the helper can read from Ollama, sorted by the newest `Updated` timestamp exposed by the site. `Code Development` is a local convenience filter, not an official Ollama category; it matches coding-oriented model names and descriptions while the other type filters map directly to Ollama capability tags where available. Cloud-only catalog entries remain visible, but the Web UI disables local pull and chat controls for entries that do not expose a local Ollama manifest.
 
 ## Pull a Model
 
