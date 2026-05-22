@@ -25,6 +25,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory, stream
 from werkzeug.exceptions import HTTPException
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+TARGET_CONTRACT_PATH = BASE_DIR / "docs" / "target-scenario-contract-v0.2.json"
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 REQUEST_CONNECT_TIMEOUT_SECONDS = 5
 REQUEST_READ_TIMEOUT_SECONDS = 600
@@ -656,6 +657,19 @@ def api_tags() -> tuple[Response, int]:
 def api_models() -> Response:
     """Return the pullable Ollama model catalog."""
     return jsonify(model_catalog())
+
+
+@app.get("/api/browser-safe/target-contract")
+def api_browser_safe_target_contract() -> tuple[Response, int]:
+    """Return the Browser-Safe AI target scenario contract."""
+    try:
+        payload = json.loads(TARGET_CONTRACT_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return jsonify({"error": "target scenario contract is missing"}), 500
+    except json.JSONDecodeError as exc:
+        return jsonify({"error": f"target scenario contract is invalid JSON: {exc}"}), 500
+
+    return jsonify(payload), 200
 
 
 @app.get("/api/project/defaults")

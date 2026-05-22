@@ -1,0 +1,307 @@
+{
+  "schema_version": "browser-safe-ai-target-contract/v0.2",
+  "target": {
+    "name": "ollama-webui",
+    "role": "intentionally vulnerable local browser-based AI lab target",
+    "repository": "https://github.com/unattributed/ollama-webui",
+    "local_base_url": "http://127.0.0.1:11435",
+    "allowed_environment": "local lab only",
+    "production_safe": false
+  },
+  "safety_boundaries": {
+    "authorized_scope": [
+      "local loopback browser testing",
+      "local files and repositories owned by the operator",
+      "safe synthetic prompts, local fixtures, and intentionally vulnerable app behavior"
+    ],
+    "out_of_scope": [
+      "third-party systems",
+      "credential theft",
+      "persistence",
+      "evasion",
+      "public internet exposure",
+      "destructive tool execution",
+      "production secrets"
+    ],
+    "operator_requirements": [
+      "bind only to localhost",
+      "use only local lab repositories or synthetic fixtures",
+      "do not use with production credentials",
+      "review generated artifacts before publishing"
+    ]
+  },
+  "global_limits": {
+    "max_file_bytes": 1048576,
+    "max_file_context_chars": 12000,
+    "max_total_file_context_chars": 24000,
+    "max_project_context_chars": 30000,
+    "project_helper_max_file_bytes": 262144,
+    "project_helper_max_search_file_bytes": 524288,
+    "project_helper_max_command_output_chars": 30000,
+    "project_helper_command_timeout_seconds": 120
+  },
+  "scenarios": [
+    {
+      "id": "chat.basic_prompt",
+      "status": "active",
+      "ui_surface": "chat form",
+      "endpoint": "/api/generate",
+      "evidence_class": "browser_chat_generation",
+      "allowed_tests": [
+        "safe prompt rendering",
+        "response capture",
+        "copy-button placement",
+        "model and tag selection traceability"
+      ],
+      "disallowed_tests": [
+        "credential collection",
+        "unauthorized network scanning",
+        "remote target exploitation"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "dom_snapshot",
+        "network_log",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 08",
+        "Part 09"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "safe prompt evidence capture"
+        ],
+        "planned": [
+          "structured browser chat scenario contract validation"
+        ]
+      }
+    },
+    {
+      "id": "file_upload.text_context",
+      "status": "active",
+      "ui_surface": "uploaded file analysis panel",
+      "endpoint": "browser local file reader",
+      "evidence_class": "uploaded_text_context",
+      "allowed_tests": [
+        "safe synthetic file analysis",
+        "file truncation behavior",
+        "prompt context boundary evidence",
+        "uploaded-file source labeling"
+      ],
+      "disallowed_tests": [
+        "real secret harvesting",
+        "malware execution",
+        "binary exploitation",
+        "unconsented local file collection"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "dom_snapshot",
+        "uploaded_fixture_hash",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 06",
+        "Part 09",
+        "Part 10"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "uploaded file prompt construction tests"
+        ],
+        "planned": [
+          "fixture manifest linkage"
+        ]
+      }
+    },
+    {
+      "id": "project_agent.guardrail_context",
+      "status": "active",
+      "ui_surface": "Project Agent Add Guardrails button",
+      "endpoint": "/api/project/context",
+      "evidence_class": "project_document_context",
+      "allowed_tests": [
+        "guardrail chunk retrieval",
+        "source path display",
+        "context preview truncation",
+        "untrusted project content boundary prompts"
+      ],
+      "disallowed_tests": [
+        "reading outside allowed workspace roots",
+        "exfiltrating private repositories",
+        "using project content as trusted instruction without boundary labels"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "dom_snapshot",
+        "request_response_json",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 06",
+        "Part 09",
+        "Part 28"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "Project Agent untrusted evidence boundary tests"
+        ],
+        "planned": [
+          "target contract driven Project Agent tests"
+        ]
+      }
+    },
+    {
+      "id": "project_agent.search",
+      "status": "active",
+      "ui_surface": "Project Agent Search button",
+      "endpoint": "/api/project/search",
+      "evidence_class": "project_search_context",
+      "allowed_tests": [
+        "safe local text search",
+        "bounded result count",
+        "source line display",
+        "query traceability"
+      ],
+      "disallowed_tests": [
+        "searching outside configured local roots",
+        "secret hunting in uncontrolled repositories",
+        "unauthorized data collection"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "request_response_json",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 06",
+        "Part 28"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "manual Project Agent search evidence"
+        ],
+        "planned": [
+          "automated search-result boundary tests"
+        ]
+      }
+    },
+    {
+      "id": "project_agent.read_file",
+      "status": "active",
+      "ui_surface": "Project Agent Read File button",
+      "endpoint": "/api/project/read",
+      "evidence_class": "project_file_context",
+      "allowed_tests": [
+        "safe local file fixture reading",
+        "path traversal rejection",
+        "text-file allowlist behavior",
+        "truncation evidence"
+      ],
+      "disallowed_tests": [
+        "reading files outside allowed workspace roots",
+        "reading production secrets",
+        "binary file extraction"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "request_response_json",
+        "fixture_hash",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 06",
+        "Part 10",
+        "Part 28"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "bounded Project Agent file tests"
+        ],
+        "planned": [
+          "contract-linked file fixture evidence"
+        ]
+      }
+    },
+    {
+      "id": "project_agent.run_tool",
+      "status": "active",
+      "ui_surface": "Project Agent Run Tool button",
+      "endpoint": "/api/project/run",
+      "evidence_class": "local_tool_output_context",
+      "allowed_tests": [
+        "allowlisted non-destructive tool execution",
+        "blocked command evidence",
+        "stdout and stderr boundary labeling",
+        "timeout behavior"
+      ],
+      "disallowed_tests": [
+        "destructive commands",
+        "persistence",
+        "credential access",
+        "network exploitation",
+        "shell escape chains"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "request_response_json",
+        "tool_output_hash",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 06",
+        "Part 08",
+        "Part 28"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "allowlisted Project Agent tool-output tests"
+        ],
+        "planned": [
+          "structured tool-output contract assertions"
+        ]
+      }
+    },
+    {
+      "id": "model.catalog_filter",
+      "status": "active",
+      "ui_surface": "model type, model, and size selectors",
+      "endpoint": "/api/models",
+      "evidence_class": "model_selection_context",
+      "allowed_tests": [
+        "model capability filter behavior",
+        "local fallback catalog behavior",
+        "selected model tag traceability"
+      ],
+      "disallowed_tests": [
+        "model provider credential testing",
+        "remote model service abuse"
+      ],
+      "expected_artifacts": [
+        "screenshot",
+        "dom_snapshot",
+        "request_response_json",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 08",
+        "Part 26"
+      ],
+      "toolkit_mapping": {
+        "current": [
+          "manual catalog evidence"
+        ],
+        "planned": [
+          "automated selector state evidence"
+        ]
+      }
+    }
+  ],
+  "traceability_rules": [
+    "Every toolkit test that targets ollama-webui should reference one scenario id from this contract.",
+    "Every evidence record should name the scenario id in the target or metadata when that field exists.",
+    "Documentation must mark unimplemented scenario mappings as planned.",
+    "New vulnerable app features should not be tested by the toolkit until this contract is updated."
+  ]
+}
