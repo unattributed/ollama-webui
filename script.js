@@ -135,15 +135,18 @@ function appendMessage(role, text) {
   const content = document.createElement('div');
   content.className = 'message-text';
 
-  const copyButton = document.createElement('button');
-  copyButton.type = 'button';
-  copyButton.className = 'message-copy-button';
-  copyButton.textContent = 'Copy';
-  copyButton.title = 'Copy message';
-  copyButton.setAttribute('aria-label', 'Copy message');
-  copyButton.addEventListener('click', () => copyMessageText(copyButton, div));
+  div.append(content);
+  if (role !== 'status') {
+    const copyButton = document.createElement('button');
+    copyButton.type = 'button';
+    copyButton.className = 'message-copy-button';
+    copyButton.textContent = 'Copy';
+    copyButton.title = 'Copy message';
+    copyButton.setAttribute('aria-label', 'Copy message');
+    copyButton.addEventListener('click', () => copyMessageText(copyButton, div));
+    div.append(copyButton);
+  }
 
-  div.append(content, copyButton);
   chatContainer.appendChild(div);
   setMessageText(div, text);
   chatContainer.scrollTop = chatContainer.scrollHeight;
