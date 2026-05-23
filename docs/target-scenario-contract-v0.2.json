@@ -78,6 +78,50 @@
       }
     },
     {
+      "id": "browser.redirect_chain",
+      "status": "active",
+      "ui_surface": "Browser-Safe redirect-chain lab pages",
+      "endpoint": "/browser-safe/redirect/start",
+      "evidence_class": "redirect_chain_context",
+      "allowed_tests": [
+        "local-only redirect hop observation",
+        "safe synthetic multistage lure tracing",
+        "final rendered page comparison",
+        "redirect-chain evidence capture"
+      ],
+      "disallowed_tests": [
+        "external redirect targets",
+        "credential collection",
+        "third-party tracking",
+        "open redirect exploitation against public systems"
+      ],
+      "expected_artifacts": [
+        "redirect_chain_json",
+        "http_status_sequence",
+        "final_url",
+        "final_page_html",
+        "evidence_record"
+      ],
+      "article_parts": [
+        "Part 13",
+        "Part 15",
+        "Part 24",
+        "Part 25",
+        "Part 26"
+      ],
+      "toolkit_mapping": {
+        "guided_lab_id": "guided.redirect_chain_evidence",
+        "implementation_status": "target-ready",
+        "current": [
+          "Guided Lab Mode planned redirect-chain evidence record"
+        ],
+        "planned": [
+          "toolkit redirect-chain evidence capture",
+          "guided redirect-chain lab implementation"
+        ]
+      }
+    },
+    {
       "id": "file_upload.text_context",
       "status": "active",
       "ui_surface": "uploaded file analysis panel",

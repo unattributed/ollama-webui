@@ -28,6 +28,7 @@ REQUIRED_SCENARIO_FIELDS = {
 }
 REQUIRED_SCENARIOS = {
     "chat.basic_prompt",
+    "browser.redirect_chain",
     "file_upload.text_context",
     "project_agent.guardrail_context",
     "project_agent.search",
@@ -124,6 +125,24 @@ def validate_scenario(scenario: Any, index: int) -> str:
         values = require_non_empty_list(mapping.get(field), f"{scenario_id}.toolkit_mapping.{field}")
         for value_index, value in enumerate(values):
             require_non_empty_string(value, f"{scenario_id}.toolkit_mapping.{field}[{value_index}]")
+
+    if scenario_id == "browser.redirect_chain":
+        guided_lab_id = require_non_empty_string(
+            mapping.get("guided_lab_id"),
+            f"{scenario_id}.toolkit_mapping.guided_lab_id",
+        )
+        if guided_lab_id != "guided.redirect_chain_evidence":
+            fail(
+                f"{scenario_id}.toolkit_mapping.guided_lab_id "
+                "must be guided.redirect_chain_evidence"
+            )
+
+        implementation_status = require_non_empty_string(
+            mapping.get("implementation_status"),
+            f"{scenario_id}.toolkit_mapping.implementation_status",
+        )
+        if implementation_status != "target-ready":
+            fail(f"{scenario_id}.toolkit_mapping.implementation_status must be target-ready")
 
     return scenario_id
 

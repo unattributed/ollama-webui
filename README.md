@@ -259,3 +259,14 @@ OLLAMA_HOST='http://127.0.0.1:11434' python scripts/pull_model.py
 ## License
 
 MIT License
+
+### Browser-Safe redirect-chain lab target
+
+The local helper includes a deterministic redirect-chain lab surface for Browser-Safe AI Systems guided labs:
+
+```text
+/browser-safe/redirect/start?variant=baseline
+/api/browser-safe/redirect-chain/scenarios
+```
+
+The redirect-chain target remains local-only and uses safe synthetic content. It is intended for free and open-source tooling such as `curl`, browser developer tools, and purpose-built Python helpers supplied by the project.
