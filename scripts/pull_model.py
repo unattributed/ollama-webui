@@ -21,7 +21,7 @@ from threading import Lock
 from typing import Any, Iterator
 
 import requests
-from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory, stream_with_context
 from werkzeug.exceptions import HTTPException
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -91,6 +91,62 @@ MAX_PROJECT_CONTEXT_CHARS = 18000
 MAX_PROJECT_CHUNK_CHARS = 2200
 MAX_PROJECT_COMMAND_OUTPUT_CHARS = 30000
 PROJECT_COMMAND_TIMEOUT_SECONDS = 120
+REDIRECT_CHAIN_VARIANTS: dict[str, list[dict[str, str]]] = {
+    "baseline": [
+        {
+            "hop": "1",
+            "label": "initial local lure",
+            "description": "The first page redirects to a local intermediate page.",
+        },
+        {
+            "hop": "2",
+            "label": "intermediate local hop",
+            "description": "The intermediate hop adds benign browser-safe context.",
+        },
+        {
+            "hop": "final",
+            "label": "final synthetic page",
+            "description": "The final page displays the controlled local test message.",
+        },
+    ],
+    "encoded": [
+        {
+            "hop": "1",
+            "label": "encoded local lure",
+            "description": "The first page carries URL-encoded synthetic context.",
+        },
+        {
+            "hop": "2",
+            "label": "decoded local hop",
+            "description": "The intermediate hop exposes the encoded context as text.",
+        },
+        {
+            "hop": "final",
+            "label": "final synthetic page",
+            "description": "The final page displays the decoded local-only message.",
+        },
+    ],
+    "slow": [
+        {
+            "hop": "1",
+            "label": "delayed local lure",
+            "description": "The first page simulates a staged navigation without external traffic.",
+        },
+        {
+            "hop": "2",
+            "label": "delayed local hop",
+            "description": "The intermediate hop records a benign delayed-navigation marker.",
+        },
+        {
+            "hop": "final",
+            "label": "final synthetic page",
+            "description": "The final page displays the local staged-navigation result.",
+        },
+    ],
+}
+REDIRECT_CHAIN_DEFAULT_VARIANT = "baseline"
+REDIRECT_CHAIN_LAB_ID = "guided.redirect_chain_evidence"
+REDIRECT_CHAIN_SCENARIO_ID = "browser.redirect_chain"
 ALLOWED_CARGO_SUBCOMMANDS = {"build", "check", "clippy", "fmt", "metadata", "test"}
 ALLOWED_GIT_SUBCOMMANDS = {"diff", "log", "show", "status"}
 ALLOWED_PYTHON_MODULES = {"compileall", "mypy", "py_compile", "pytest", "ruff", "unittest"}
@@ -627,6 +683,64 @@ def project_command_env() -> dict[str, str]:
     return env
 
 
+def redirect_chain_variant(value: object) -> str:
+    """Return a supported redirect-chain variant."""
+    candidate = str(value or REDIRECT_CHAIN_DEFAULT_VARIANT).strip().lower()
+    if candidate not in REDIRECT_CHAIN_VARIANTS:
+        return REDIRECT_CHAIN_DEFAULT_VARIANT
+    return candidate
+
+
+def redirect_chain_hops(variant: str) -> list[dict[str, str]]:
+    """Return hop metadata for a redirect-chain variant."""
+    return REDIRECT_CHAIN_VARIANTS[redirect_chain_variant(variant)]
+
+
+def redirect_chain_url(path: str, variant: str) -> str:
+    """Build a local-only redirect-chain URL."""
+    return f"{path}?variant={redirect_chain_variant(variant)}"
+
+
+def redirect_chain_html(variant: str) -> str:
+    """Render the final redirect-chain page as deterministic HTML."""
+    hops = redirect_chain_hops(variant)
+    hop_items = "\n".join(
+        f"<li><strong>{hop['hop']}</strong>: {hop['label']} - {hop['description']}</li>"
+        for hop in hops
+    )
+    return f"""<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\">
+  <title>Browser-Safe AI Redirect Chain Lab</title>
+  <meta name=\"browser-safe-ai-lab\" content=\"{REDIRECT_CHAIN_LAB_ID}\">
+  <meta name=\"browser-safe-ai-scenario\" content=\"{REDIRECT_CHAIN_SCENARIO_ID}\">
+</head>
+<body>
+  <main>
+    <h1>Browser-Safe AI Redirect Chain Lab</h1>
+    <p id=\"lab-purpose\">This local-only page demonstrates staged browser navigation for evidence capture.</p>
+    <dl>
+      <dt>Lab id</dt>
+      <dd>{REDIRECT_CHAIN_LAB_ID}</dd>
+      <dt>Target scenario</dt>
+      <dd>{REDIRECT_CHAIN_SCENARIO_ID}</dd>
+      <dt>Variant</dt>
+      <dd>{redirect_chain_variant(variant)}</dd>
+    </dl>
+    <h2>Observed local hops</h2>
+    <ol id=\"redirect-hop-summary\">
+      {hop_items}
+    </ol>
+    <p id=\"safety-boundary\">All redirects remain on 127.0.0.1 and use synthetic data only.</p>
+  </main>
+</body>
+</html>
+"""
+
+
+
+
 @app.get("/")
 def serve_index() -> Response:
     """Serve the main Web UI."""
@@ -670,6 +784,69 @@ def api_browser_safe_target_contract() -> tuple[Response, int]:
         return jsonify({"error": f"target scenario contract is invalid JSON: {exc}"}), 500
 
     return jsonify(payload), 200
+
+
+
+
+@app.get("/api/browser-safe/redirect-chain/scenarios")
+def api_browser_safe_redirect_chain_scenarios() -> Response:
+    """Return local redirect-chain lab metadata."""
+    variants = {
+        name: {
+            "entrypoint": redirect_chain_url("/browser-safe/redirect/start", name),
+            "final": redirect_chain_url("/browser-safe/redirect/final", name),
+            "hops": hops,
+        }
+        for name, hops in REDIRECT_CHAIN_VARIANTS.items()
+    }
+    return jsonify(
+        {
+            "lab_id": REDIRECT_CHAIN_LAB_ID,
+            "target_scenario_id": REDIRECT_CHAIN_SCENARIO_ID,
+            "local_only": True,
+            "free_and_open_source_tooling": True,
+            "variants": variants,
+        }
+    )
+
+
+@app.get("/browser-safe/redirect/start")
+def browser_safe_redirect_start() -> Response:
+    """Start a deterministic local-only redirect chain."""
+    variant = redirect_chain_variant(request.args.get("variant"))
+    response = redirect(redirect_chain_url("/browser-safe/redirect/hop/1", variant), code=302)
+    response.headers["X-Browser-Safe-Lab"] = REDIRECT_CHAIN_LAB_ID
+    response.headers["X-Browser-Safe-Scenario"] = REDIRECT_CHAIN_SCENARIO_ID
+    response.headers["X-Browser-Safe-Hop"] = "start"
+    return response
+
+
+@app.get("/browser-safe/redirect/hop/<int:hop_number>")
+def browser_safe_redirect_hop(hop_number: int) -> Response | tuple[Response, int]:
+    """Continue a deterministic local-only redirect chain."""
+    variant = redirect_chain_variant(request.args.get("variant"))
+    if hop_number not in {1, 2}:
+        return jsonify({"error": "redirect hop must be 1 or 2"}), 404
+
+    next_path = "/browser-safe/redirect/hop/2" if hop_number == 1 else "/browser-safe/redirect/final"
+    response = redirect(redirect_chain_url(next_path, variant), code=302)
+    response.headers["X-Browser-Safe-Lab"] = REDIRECT_CHAIN_LAB_ID
+    response.headers["X-Browser-Safe-Scenario"] = REDIRECT_CHAIN_SCENARIO_ID
+    response.headers["X-Browser-Safe-Hop"] = str(hop_number)
+    return response
+
+
+@app.get("/browser-safe/redirect/final")
+def browser_safe_redirect_final() -> Response:
+    """Return the final deterministic redirect-chain lab page."""
+    variant = redirect_chain_variant(request.args.get("variant"))
+    html = redirect_chain_html(variant)
+    response = Response(html, mimetype="text/html")
+    response.headers["X-Browser-Safe-Lab"] = REDIRECT_CHAIN_LAB_ID
+    response.headers["X-Browser-Safe-Scenario"] = REDIRECT_CHAIN_SCENARIO_ID
+    response.headers["X-Browser-Safe-Hop"] = "final"
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/project/defaults")
