@@ -122,6 +122,64 @@
       }
     },
     {
+      "id": "browser.dom_render_mismatch",
+      "status": "active",
+      "ui_surface": "Browser-Safe DOM/render mismatch lab page",
+      "endpoint": "/browser-safe/dom-render-mismatch",
+      "evidence_class": "dom_render_mismatch_context",
+      "allowed_tests": [
+        "local-only raw DOM versus rendered text comparison",
+        "CSS-hidden and offscreen synthetic content inventory",
+        "ARIA-hidden and metadata mismatch observation",
+        "browser-rendered screenshot and visible text comparison",
+        "model-bound context construction evidence",
+        "local-only browser rendering evidence capture",
+        "browser rendering evidence capture with raw DOM, computed style, visible text, and screenshot comparison"
+      ],
+      "disallowed_tests": [
+        "external URL loading",
+        "credential collection",
+        "third-party tracking",
+        "production site testing",
+        "browser exploit delivery"
+      ],
+      "expected_artifacts": [
+        "dom_snapshot_html",
+        "raw_dom_text",
+        "rendered_text",
+        "hidden_dom_findings_json",
+        "computed_style_findings_json",
+        "dom_render_diff_json",
+        "rendered_screenshot_png",
+        "model_bound_context",
+        "model_response_json",
+        "evidence_record",
+        "artifact_manifest",
+        "analyst_report"
+      ],
+      "article_parts": [
+        "Part 10",
+        "Part 11",
+        "Part 12",
+        "Part 24",
+        "Part 25",
+        "Part 26"
+      ],
+      "toolkit_mapping": {
+        "guided_lab_id": "guided.dom_render_mismatch",
+        "implementation_status": "target-ready",
+        "current": [
+          "Guided Lab Mode planned DOM/render mismatch evidence record"
+        ],
+        "planned": [
+          "toolkit Playwright DOM/render mismatch evidence capture",
+          "guided DOM/render mismatch lab implementation",
+          "toolkit browser rendering evidence capture with Playwright or purpose-built Python helpers",
+          "compare raw DOM text, browser-rendered visible text, computed style findings, and screenshot evidence"
+        ]
+      }
+    },
+    {
       "id": "file_upload.text_context",
       "status": "active",
       "ui_surface": "uploaded file analysis panel",
