@@ -270,3 +270,17 @@ The local helper includes a deterministic redirect-chain lab surface for Browser
 ```
 
 The redirect-chain target remains local-only and uses safe synthetic content. It is intended for free and open-source tooling such as `curl`, browser developer tools, and purpose-built Python helpers supplied by the project.
+
+
+### Browser-Safe DOM/render mismatch lab target
+
+The local helper includes a deterministic DOM/render mismatch lab surface for Browser-Safe AI Systems guided labs:
+
+```text
+/browser-safe/dom-render-mismatch?variant=hidden_instruction
+/api/browser-safe/dom-render-mismatch/scenarios
+```
+
+The DOM/render mismatch target remains local-only and uses safe synthetic content. It is intended for free and open-source tooling, especially browser automation with Playwright or purpose-built Python helpers supplied by the project. Static HTML parsing alone is not sufficient for this lab because the security question is the difference between raw DOM state and browser-rendered state.
+
+The DOM/render mismatch target explicitly requires browser rendering evidence capture. A valid toolkit implementation must compare raw DOM state, browser-rendered visible text, computed style findings, and screenshot evidence. Static HTML parsing alone is not sufficient.

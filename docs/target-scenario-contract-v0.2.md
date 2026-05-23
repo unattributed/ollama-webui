@@ -46,6 +46,7 @@ Out of scope:
 | --- | --- | --- | --- |
 | `chat.basic_prompt` | Chat form | `/api/generate` | `browser_chat_generation` |
 | `browser.redirect_chain` | Browser-Safe redirect-chain lab pages | `/browser-safe/redirect/start` | `redirect_chain_context` |
+| `browser.dom_render_mismatch` | Browser-Safe DOM/render mismatch lab page | `/browser-safe/dom-render-mismatch` | `dom_render_mismatch_context` |
 | `file_upload.text_context` | Uploaded file analysis | Browser local file reader | `uploaded_text_context` |
 | `project_agent.guardrail_context` | Project Agent guardrails | `/api/project/context` | `project_document_context` |
 | `project_agent.search` | Project Agent search | `/api/project/search` | `project_search_context` |
@@ -89,6 +90,49 @@ implementation_status: target-ready
 
 The `target-ready` status means the vulnerable app exposes the local target behavior and the toolkit may implement evidence capture in a separate branch. It does not mean the toolkit lab is already implemented.
 
+
+## DOM/render mismatch local lab surface
+
+The DOM/render mismatch lab surface is intentionally local and deterministic. It is used to teach and validate how raw DOM extraction, browser-rendered visible text, CSS-hidden text, offscreen content, ARIA-hidden content, and metadata can diverge.
+
+Entry point:
+
+```text
+/browser-safe/dom-render-mismatch
+```
+
+Metadata endpoint:
+
+```text
+/api/browser-safe/dom-render-mismatch/scenarios
+```
+
+Supported safe variants:
+
+```text
+baseline
+hidden_instruction
+rendered_contradiction
+```
+
+Example local checks with free and open-source tooling:
+
+```bash
+curl -s http://127.0.0.1:11435/api/browser-safe/dom-render-mismatch/scenarios | python -m json.tool
+curl -s http://127.0.0.1:11435/browser-safe/dom-render-mismatch?variant=hidden_instruction
+```
+
+The surface does not load external scripts, images, fonts, or trackers. It is designed for Playwright-based or purpose-built Python browser evidence capture in the toolkit. Static HTML parsing alone is not sufficient for senior-quality DOM/render mismatch testing because the lab is about the difference between raw DOM state and browser-rendered state.
+
+Toolkit mapping:
+
+```text
+guided_lab_id: guided.dom_render_mismatch
+implementation_status: target-ready
+```
+
+The `target-ready` status means the vulnerable app exposes the local target behavior and the toolkit may implement browser-rendering evidence capture in a separate branch. It does not mean the toolkit lab is already implemented.
+
 ## Traceability rules
 
 1. Every toolkit test that targets `ollama-webui` should reference one scenario id from the JSON contract.
@@ -106,3 +150,5 @@ python scripts/validate_target_contract.py
 ```
 
 The validator confirms that the contract has required top-level fields, active scenarios, scenario ids, safety boundaries, expected artifacts, article mappings, and no duplicate scenario ids.
+
+The DOM/render mismatch target explicitly requires browser rendering evidence capture. A valid toolkit implementation must compare raw DOM state, browser-rendered visible text, computed style findings, and screenshot evidence. Static HTML parsing alone is not sufficient for this scenario.

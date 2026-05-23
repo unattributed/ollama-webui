@@ -29,6 +29,7 @@ REQUIRED_SCENARIO_FIELDS = {
 REQUIRED_SCENARIOS = {
     "chat.basic_prompt",
     "browser.redirect_chain",
+    "browser.dom_render_mismatch",
     "file_upload.text_context",
     "project_agent.guardrail_context",
     "project_agent.search",
@@ -126,15 +127,20 @@ def validate_scenario(scenario: Any, index: int) -> str:
         for value_index, value in enumerate(values):
             require_non_empty_string(value, f"{scenario_id}.toolkit_mapping.{field}[{value_index}]")
 
-    if scenario_id == "browser.redirect_chain":
+    guided_lab_requirements = {
+        "browser.redirect_chain": "guided.redirect_chain_evidence",
+        "browser.dom_render_mismatch": "guided.dom_render_mismatch",
+    }
+    expected_guided_lab = guided_lab_requirements.get(scenario_id)
+    if expected_guided_lab is not None:
         guided_lab_id = require_non_empty_string(
             mapping.get("guided_lab_id"),
             f"{scenario_id}.toolkit_mapping.guided_lab_id",
         )
-        if guided_lab_id != "guided.redirect_chain_evidence":
+        if guided_lab_id != expected_guided_lab:
             fail(
                 f"{scenario_id}.toolkit_mapping.guided_lab_id "
-                "must be guided.redirect_chain_evidence"
+                f"must be {expected_guided_lab}"
             )
 
         implementation_status = require_non_empty_string(
@@ -143,6 +149,27 @@ def validate_scenario(scenario: Any, index: int) -> str:
         )
         if implementation_status != "target-ready":
             fail(f"{scenario_id}.toolkit_mapping.implementation_status must be target-ready")
+
+    if scenario_id == "browser.dom_render_mismatch":
+        expected_artifacts = set(item.get("expected_artifacts", []))
+        required_artifacts = {
+            "dom_snapshot_html",
+            "raw_dom_text",
+            "rendered_text",
+            "hidden_dom_findings_json",
+            "computed_style_findings_json",
+            "dom_render_diff_json",
+            "rendered_screenshot_png",
+            "model_bound_context",
+            "model_response_json",
+            "artifact_manifest",
+        }
+        missing_artifacts = required_artifacts - expected_artifacts
+        if missing_artifacts:
+            fail(
+                f"{scenario_id}.expected_artifacts missing required DOM/render artifacts: "
+                f"{', '.join(sorted(missing_artifacts))}"
+            )
 
     return scenario_id
 
