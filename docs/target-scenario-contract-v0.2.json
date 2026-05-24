@@ -180,6 +180,62 @@
       }
     },
     {
+      "id": "browser.iframe_frame_tree",
+      "status": "active",
+      "ui_surface": "Browser-Safe iframe/frame-tree lab pages",
+      "endpoint": "/browser-safe/iframe-frame-tree",
+      "evidence_class": "iframe_frame_tree_context",
+      "allowed_tests": [
+        "local-only iframe and frame-tree observation",
+        "same-origin frame DOM snapshot capture",
+        "sandbox attribute evidence capture",
+        "srcdoc frame evidence capture",
+        "nested browsing context evidence capture",
+        "frame-tree evidence capture with browser rendering"
+      ],
+      "disallowed_tests": [
+        "external URL loading",
+        "third-party frame targets",
+        "credential collection",
+        "third-party tracking",
+        "production-target testing",
+        "attempts to bypass browser isolation controls"
+      ],
+      "expected_artifacts": [
+        "frame_tree_json",
+        "frame_url_list",
+        "top_page_dom_snapshot_html",
+        "frame_dom_snapshots",
+        "sandbox_findings_json",
+        "srcdoc_findings_json",
+        "cross_frame_rendered_text",
+        "model_bound_context",
+        "model_response_json",
+        "evidence_record",
+        "artifact_manifest",
+        "analyst_report"
+      ],
+      "article_parts": [
+        "Part 12",
+        "Part 24",
+        "Part 26",
+        "Part 31"
+      ],
+      "toolkit_mapping": {
+        "guided_lab_id": "guided.iframe_frame_tree_evidence",
+        "implementation_status": "target-ready",
+        "current": [
+          "Guided Lab Mode planned iframe/frame-tree evidence record"
+        ],
+        "planned": [
+          "toolkit Playwright iframe/frame-tree evidence capture",
+          "guided iframe/frame-tree lab implementation",
+          "frame-tree extraction with frame URL, sandbox, srcdoc, nested frame, and rendered text evidence",
+          "fail-closed checks for external URLs and missing scenario headers"
+        ]
+      }
+    },
+    {
       "id": "file_upload.text_context",
       "status": "active",
       "ui_surface": "uploaded file analysis panel",
