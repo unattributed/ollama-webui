@@ -157,6 +157,7 @@ chat.basic_prompt
 browser.redirect_chain
 browser.dom_render_mismatch
 browser.iframe_frame_tree
+browser.storage_state_boundary
 file_upload.text_context
 project_agent.guardrail_context
 project_agent.search
@@ -173,6 +174,40 @@ python scripts/validate_target_contract.py
 ```
 
 The contract does not make this application safer. It makes the deliberately weak lab target more explicit and prevents the toolkit from claiming coverage that the target has not declared.
+
+
+## Browser-Safe AI Storage-State Boundary Lab
+
+The storage-state boundary lab is a local-only target surface for validating whether browser-state evidence is collected correctly without leaking protected browser state into model-bound context.
+
+Local endpoints:
+
+```text
+http://127.0.0.1:11435/api/browser-safe/storage-state-boundary/scenarios
+http://127.0.0.1:11435/browser-safe/storage-state-boundary
+http://127.0.0.1:11435/api/browser-safe/storage-state-boundary/state-seed
+```
+
+Supported safe variants:
+
+```text
+baseline_no_state
+cookie_state_boundary
+local_storage_state_boundary
+session_storage_state_boundary
+combined_state_boundary
+```
+
+The target uses synthetic values only. It does not load external URLs, collect credentials, use third-party tracking, or support production-target testing. Static HTML parsing is intentionally insufficient because browser state is seeded after browser rendering through a local same-origin JSON endpoint.
+
+Validate the target surface before implementing toolkit evidence capture:
+
+```bash
+cd /home/foo/Workspace/ollama-webui
+python scripts/validate_target_contract.py
+python scripts/validate_storage_state_boundary_target.py
+```
+
 
 ## Project Agent
 

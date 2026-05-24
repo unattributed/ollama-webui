@@ -31,6 +31,7 @@ REQUIRED_SCENARIOS = {
     "browser.redirect_chain",
     "browser.dom_render_mismatch",
     "browser.iframe_frame_tree",
+    "browser.storage_state_boundary",
     "file_upload.text_context",
     "project_agent.guardrail_context",
     "project_agent.search",
@@ -132,6 +133,7 @@ def validate_scenario(scenario: Any, index: int) -> str:
         "browser.redirect_chain": "guided.redirect_chain_evidence",
         "browser.dom_render_mismatch": "guided.dom_render_mismatch",
         "browser.iframe_frame_tree": "guided.iframe_frame_tree_evidence",
+        "browser.storage_state_boundary": "guided.storage_state_boundary_evidence",
     }
     expected_guided_lab = guided_lab_requirements.get(scenario_id)
     if expected_guided_lab is not None:
@@ -191,6 +193,31 @@ def validate_scenario(scenario: Any, index: int) -> str:
         if missing_artifacts:
             fail(
                 f"{scenario_id}.expected_artifacts missing required iframe/frame-tree artifacts: "
+                f"{', '.join(sorted(missing_artifacts))}"
+            )
+
+
+    if scenario_id == "browser.storage_state_boundary":
+        expected_artifacts = set(item.get("expected_artifacts", []))
+        required_artifacts = {
+            "storage_state_summary_json",
+            "cookie_findings_json",
+            "local_storage_findings_json",
+            "session_storage_findings_json",
+            "cache_like_findings_json",
+            "browser_state_before_json",
+            "browser_state_after_json",
+            "model_bound_context",
+            "model_response_json",
+            "state_boundary_findings_json",
+            "evidence_record",
+            "artifact_manifest",
+            "analyst_report",
+        }
+        missing_artifacts = required_artifacts - expected_artifacts
+        if missing_artifacts:
+            fail(
+                f"{scenario_id}.expected_artifacts missing required storage-state artifacts: "
                 f"{', '.join(sorted(missing_artifacts))}"
             )
 

@@ -31,7 +31,22 @@ jobs:
         run: python -m pip check
 
       - name: Compile Python helpers
-        run: python -m py_compile scripts/pull_model.py scripts/deploy_full_ollama_ui.py
+        run: |
+          python -m py_compile \
+            scripts/pull_model.py \
+            scripts/deploy_full_ollama_ui.py \
+            scripts/validate_target_contract.py \
+            scripts/validate_iframe_frame_tree_target.py \
+            scripts/validate_storage_state_boundary_target.py
+
+      - name: Validate target contract
+        run: python scripts/validate_target_contract.py
+
+      - name: Validate iframe/frame-tree target
+        run: python scripts/validate_iframe_frame_tree_target.py
+
+      - name: Validate storage-state boundary target
+        run: python scripts/validate_storage_state_boundary_target.py
 
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.txt
