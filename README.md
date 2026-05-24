@@ -154,6 +154,9 @@ Current scenario ids:
 
 ```text
 chat.basic_prompt
+browser.redirect_chain
+browser.dom_render_mismatch
+browser.iframe_frame_tree
 file_upload.text_context
 project_agent.guardrail_context
 project_agent.search
@@ -284,3 +287,25 @@ The local helper includes a deterministic DOM/render mismatch lab surface for Br
 The DOM/render mismatch target remains local-only and uses safe synthetic content. It is intended for free and open-source tooling, especially browser automation with Playwright or purpose-built Python helpers supplied by the project. Static HTML parsing alone is not sufficient for this lab because the security question is the difference between raw DOM state and browser-rendered state.
 
 The DOM/render mismatch target explicitly requires browser rendering evidence capture. A valid toolkit implementation must compare raw DOM state, browser-rendered visible text, computed style findings, and screenshot evidence. Static HTML parsing alone is not sufficient.
+
+### Browser-Safe iframe/frame-tree lab target
+
+The local helper includes a deterministic iframe/frame-tree lab surface for Browser-Safe AI Systems guided labs:
+
+```text
+/browser-safe/iframe-frame-tree?variant=baseline
+/api/browser-safe/iframe-frame-tree/scenarios
+```
+
+Supported safe variants:
+
+```text
+baseline
+sandboxed_frame
+srcdoc_hidden_context
+nested_frame_chain
+```
+
+The iframe/frame-tree target remains local-only and uses safe synthetic content. It is intended for free and open-source tooling, especially browser automation with Playwright or purpose-built Python helpers supplied by the project. Static HTML parsing alone is not sufficient for this lab because the security question requires browser-rendered frame-tree observation, frame URL capture, sandbox attribute review, srcdoc detection, nested browsing context mapping, and cross-frame rendered text collection.
+
+The target deliberately does not load external URLs, collect credentials, use no third-party tracking, and does not support production-target testing. A valid toolkit implementation must fail closed on external URLs, wrong or missing scenario headers, and incomplete frame-tree evidence.

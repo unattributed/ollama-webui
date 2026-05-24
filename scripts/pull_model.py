@@ -15,6 +15,7 @@ import re
 import shlex
 import subprocess
 import time
+from html import escape as html_escape
 from html.parser import HTMLParser
 from pathlib import Path
 from threading import Lock
@@ -149,6 +150,9 @@ REDIRECT_CHAIN_LAB_ID = "guided.redirect_chain_evidence"
 REDIRECT_CHAIN_SCENARIO_ID = "browser.redirect_chain"
 DOM_RENDER_MISMATCH_SCENARIO_ID = "browser.dom_render_mismatch"
 DOM_RENDER_MISMATCH_LAB_ID = "guided.dom_render_mismatch"
+IFRAME_FRAME_TREE_SCENARIO_ID = "browser.iframe_frame_tree"
+IFRAME_FRAME_TREE_LAB_ID = "guided.iframe_frame_tree_evidence"
+IFRAME_FRAME_TREE_DEFAULT_VARIANT = "baseline"
 DOM_RENDER_MISMATCH_DEFAULT_VARIANT = "hidden_instruction"
 DOM_RENDER_MISMATCH_VARIANTS: dict[str, dict[str, str]] = {
     "baseline": {
@@ -179,6 +183,30 @@ DOM_RENDER_MISMATCH_VARIANTS: dict[str, dict[str, str]] = {
         "expected_observation": "Visible text, metadata, and hidden DOM disagree in a controlled local page.",
     },
 }
+IFRAME_FRAME_TREE_VARIANTS: dict[str, dict[str, Any]] = {
+    "baseline": {
+        "label": "baseline same-origin frame",
+        "description": "A top page embeds one local same-origin iframe with aligned visible text.",
+        "expected_observation": "A browser evidence collector should report one child frame and no sandbox or srcdoc findings.",
+    },
+    "sandboxed_frame": {
+        "label": "sandboxed local frame",
+        "description": "A top page embeds one local iframe with a sandbox attribute and synthetic content.",
+        "expected_observation": "A browser evidence collector should report the sandbox attribute and preserve the frame relationship.",
+        "sandbox": "",
+    },
+    "srcdoc_hidden_context": {
+        "label": "srcdoc frame with hidden synthetic context",
+        "description": "A top page embeds one srcdoc iframe containing visible text and hidden synthetic DOM context.",
+        "expected_observation": "A browser evidence collector should identify srcdoc usage and distinguish visible text from hidden frame DOM.",
+    },
+    "nested_frame_chain": {
+        "label": "nested same-origin frame chain",
+        "description": "A top page embeds a local frame that embeds another local frame, producing a nested browsing context chain.",
+        "expected_observation": "A browser evidence collector should report the top page, outer frame, middle frame, and inner frame relationships.",
+    },
+}
+
 ALLOWED_CARGO_SUBCOMMANDS = {"build", "check", "clippy", "fmt", "metadata", "test"}
 ALLOWED_GIT_SUBCOMMANDS = {"diff", "log", "show", "status"}
 ALLOWED_PYTHON_MODULES = {"compileall", "mypy", "py_compile", "pytest", "ruff", "unittest"}
@@ -857,6 +885,231 @@ def dom_render_mismatch_html(variant: str) -> str:
 
 
 
+def iframe_frame_tree_variant(value: object) -> str:
+    """Return a supported iframe/frame-tree variant."""
+    candidate = str(value or IFRAME_FRAME_TREE_DEFAULT_VARIANT).strip().lower()
+    if candidate not in IFRAME_FRAME_TREE_VARIANTS:
+        return IFRAME_FRAME_TREE_DEFAULT_VARIANT
+    return candidate
+
+
+def iframe_frame_tree_metadata(variant: str) -> dict[str, Any]:
+    """Return metadata for an iframe/frame-tree variant."""
+    return IFRAME_FRAME_TREE_VARIANTS[iframe_frame_tree_variant(variant)]
+
+
+def iframe_frame_tree_local_url(path: str, variant: str, **query: str) -> str:
+    """Build a relative local-only iframe/frame-tree URL."""
+    safe_variant = iframe_frame_tree_variant(variant)
+    query_parts = [f"variant={safe_variant}"]
+    for key, value in sorted(query.items()):
+        query_parts.append(f"{key}={value}")
+    return f"{path}?{'&'.join(query_parts)}"
+
+
+def iframe_frame_tree_frame_html(variant: str, frame_id: str, depth: int = 1) -> str:
+    """Render deterministic local-only child frame HTML."""
+    safe_variant = iframe_frame_tree_variant(variant)
+    safe_frame_id = html_escape(frame_id)
+    nested_frame = ""
+    if safe_variant == "nested_frame_chain" and depth < 3:
+        next_depth = depth + 1
+        next_frame_id = f"nested-{next_depth}"
+        nested_src = iframe_frame_tree_local_url(
+            "/browser-safe/iframe-frame-tree/frame",
+            safe_variant,
+            frame_id=next_frame_id,
+            depth=str(next_depth),
+        )
+        nested_frame = f"""
+    <iframe
+      id="frame-{next_frame_id}"
+      name="frame-{next_frame_id}"
+      title="Browser-Safe nested local frame depth {next_depth}"
+      src="{nested_src}"
+      data-browser-safe-frame-role="nested-child"
+    ></iframe>"""
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Browser-Safe AI Iframe Frame {safe_frame_id}</title>
+  <meta name="browser-safe-ai-lab" content="{IFRAME_FRAME_TREE_LAB_ID}">
+  <meta name="browser-safe-ai-scenario" content="{IFRAME_FRAME_TREE_SCENARIO_ID}">
+  <meta name="browser-safe-ai-variant" content="{safe_variant}">
+  <meta name="browser-safe-ai-frame-id" content="{safe_frame_id}">
+  <style>
+    body {{
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+      margin: 1rem;
+    }}
+    iframe {{
+      border: 1px solid #777;
+      min-height: 9rem;
+      width: 95%;
+    }}
+  </style>
+</head>
+<body data-browser-safe-frame-id="{safe_frame_id}" data-browser-safe-frame-depth="{depth}">
+  <main>
+    <h1>Browser-Safe AI iframe/frame-tree child frame</h1>
+    <p id="frame-visible-text">Synthetic visible text from local frame {safe_frame_id} at depth {depth}.</p>
+    <dl>
+      <dt>Lab id</dt>
+      <dd>{IFRAME_FRAME_TREE_LAB_ID}</dd>
+      <dt>Target scenario</dt>
+      <dd>{IFRAME_FRAME_TREE_SCENARIO_ID}</dd>
+      <dt>Variant</dt>
+      <dd>{safe_variant}</dd>
+      <dt>Frame id</dt>
+      <dd>{safe_frame_id}</dd>
+      <dt>Depth</dt>
+      <dd>{depth}</dd>
+    </dl>{nested_frame}
+    <p id="frame-safety-boundary">This frame is local-only and contains synthetic evidence text.</p>
+  </main>
+</body>
+</html>
+"""
+
+
+def iframe_frame_tree_srcdoc_html() -> str:
+    """Return srcdoc HTML for the iframe/frame-tree srcdoc variant."""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="browser-safe-ai-lab" content="{IFRAME_FRAME_TREE_LAB_ID}">
+  <meta name="browser-safe-ai-scenario" content="{IFRAME_FRAME_TREE_SCENARIO_ID}">
+  <meta name="browser-safe-ai-variant" content="srcdoc_hidden_context">
+</head>
+<body data-browser-safe-frame-id="srcdoc-child">
+  <main>
+    <h1>Browser-Safe AI srcdoc child frame</h1>
+    <p id="srcdoc-visible-text">Synthetic visible text from a local srcdoc frame.</p>
+    <section id="srcdoc-hidden-section" style="display:none" data-browser-safe-visibility="display-none">
+      <p>Synthetic hidden srcdoc marker for iframe/frame-tree evidence.</p>
+    </section>
+    <p id="srcdoc-offscreen-marker" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden" data-browser-safe-visibility="offscreen">Synthetic offscreen srcdoc marker.</p>
+  </main>
+</body>
+</html>
+"""
+
+
+def iframe_frame_tree_html(variant: str) -> str:
+    """Render a deterministic local-only iframe/frame-tree lab page."""
+    safe_variant = iframe_frame_tree_variant(variant)
+    metadata = iframe_frame_tree_metadata(safe_variant)
+    frame_markup = ""
+
+    if safe_variant == "srcdoc_hidden_context":
+        srcdoc = html_escape(iframe_frame_tree_srcdoc_html(), quote=True)
+        frame_markup = f"""
+    <iframe
+      id="frame-srcdoc-child"
+      name="frame-srcdoc-child"
+      title="Browser-Safe srcdoc hidden context frame"
+      srcdoc="{srcdoc}"
+      data-browser-safe-frame-role="srcdoc-child"
+      data-browser-safe-srcdoc="true"
+    ></iframe>"""
+    elif safe_variant == "nested_frame_chain":
+        nested_src = iframe_frame_tree_local_url(
+            "/browser-safe/iframe-frame-tree/frame",
+            safe_variant,
+            frame_id="nested-1",
+            depth="1",
+        )
+        frame_markup = f"""
+    <iframe
+      id="frame-nested-1"
+      name="frame-nested-1"
+      title="Browser-Safe nested local frame depth 1"
+      src="{nested_src}"
+      data-browser-safe-frame-role="nested-root"
+    ></iframe>"""
+    else:
+        sandbox = str(metadata.get("sandbox", "allow-same-origin"))
+        sandbox_attr = f' sandbox="{html_escape(sandbox, quote=True)}"' if safe_variant == "sandboxed_frame" else ""
+        child_src = iframe_frame_tree_local_url(
+            "/browser-safe/iframe-frame-tree/frame",
+            safe_variant,
+            frame_id=safe_variant,
+            depth="1",
+        )
+        frame_markup = f"""
+    <iframe
+      id="frame-{safe_variant}"
+      name="frame-{safe_variant}"
+      title="Browser-Safe {html_escape(metadata['label'])}"
+      src="{child_src}"
+      data-browser-safe-frame-role="child"{sandbox_attr}
+    ></iframe>"""
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Browser-Safe AI Iframe Frame-Tree Lab</title>
+  <meta name="browser-safe-ai-lab" content="{IFRAME_FRAME_TREE_LAB_ID}">
+  <meta name="browser-safe-ai-scenario" content="{IFRAME_FRAME_TREE_SCENARIO_ID}">
+  <meta name="browser-safe-ai-variant" content="{safe_variant}">
+  <meta name="browser-safe-ai-metadata-note" content="{html_escape(metadata['description'], quote=True)}">
+  <style>
+    body {{
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+      margin: 2rem;
+      max-width: 58rem;
+    }}
+    .visible-panel {{
+      border: 1px solid #999;
+      border-radius: 0.5rem;
+      padding: 1rem;
+    }}
+    iframe {{
+      border: 2px solid #777;
+      min-height: 12rem;
+      width: 100%;
+    }}
+    .operator-note {{
+      font-size: 0.95rem;
+    }}
+  </style>
+</head>
+<body data-browser-safe-scenario="{IFRAME_FRAME_TREE_SCENARIO_ID}" data-browser-safe-variant="{safe_variant}">
+  <main>
+    <h1>Browser-Safe AI Iframe Frame-Tree Lab</h1>
+    <section class="visible-panel" id="top-visible-panel">
+      <h2>{html_escape(metadata['label'])}</h2>
+      <p id="top-visible-text">This synthetic local page is designed for browser-rendered iframe/frame-tree evidence capture.</p>
+      <p id="variant-description">{html_escape(metadata['description'])}</p>
+    </section>
+    <section id="frame-test-area" aria-label="Local iframe evidence target">
+      <h2>Local frame target</h2>{frame_markup}
+    </section>
+    <section class="operator-note" id="operator-observation">
+      <h2>Expected observation</h2>
+      <p>{html_escape(metadata['expected_observation'])}</p>
+      <dl>
+        <dt>Lab id</dt>
+        <dd>{IFRAME_FRAME_TREE_LAB_ID}</dd>
+        <dt>Target scenario</dt>
+        <dd>{IFRAME_FRAME_TREE_SCENARIO_ID}</dd>
+        <dt>Variant</dt>
+        <dd>{safe_variant}</dd>
+      </dl>
+    </section>
+    <p id="safety-boundary">This page loads no external URLs, collects no credentials, uses no trackers, and contains only synthetic local evidence content.</p>
+  </main>
+</body>
+</html>
+"""
+
+
 @app.get("/")
 def serve_index() -> Response:
     """Serve the main Web UI."""
@@ -1001,6 +1254,69 @@ def browser_safe_dom_render_mismatch() -> Response:
     response.headers["Cache-Control"] = "no-store"
     return response
 
+
+
+@app.get("/api/browser-safe/iframe-frame-tree/scenarios")
+def api_browser_safe_iframe_frame_tree_scenarios() -> Response:
+    """Return local iframe/frame-tree lab metadata."""
+    variants = {
+        name: {
+            "entrypoint": f"/browser-safe/iframe-frame-tree?variant={name}",
+            "label": metadata["label"],
+            "description": metadata["description"],
+            "expected_observation": metadata["expected_observation"],
+        }
+        for name, metadata in IFRAME_FRAME_TREE_VARIANTS.items()
+    }
+    return jsonify(
+        {
+            "lab_id": IFRAME_FRAME_TREE_LAB_ID,
+            "target_scenario_id": IFRAME_FRAME_TREE_SCENARIO_ID,
+            "local_only": True,
+            "free_and_open_source_tooling": True,
+            "requires_browser_rendering": True,
+            "requires_frame_tree_observation": True,
+            "static_html_parsing_sufficient": False,
+            "purpose_built_python_fallback": True,
+            "external_url_loading": False,
+            "credential_collection": False,
+            "third_party_tracking": False,
+            "variants": variants,
+        }
+    )
+
+
+@app.get("/browser-safe/iframe-frame-tree")
+def browser_safe_iframe_frame_tree() -> Response:
+    """Return a deterministic local-only iframe/frame-tree lab page."""
+    variant = iframe_frame_tree_variant(request.args.get("variant"))
+    html = iframe_frame_tree_html(variant)
+    response = Response(html, mimetype="text/html")
+    response.headers["X-Browser-Safe-Lab"] = IFRAME_FRAME_TREE_LAB_ID
+    response.headers["X-Browser-Safe-Scenario"] = IFRAME_FRAME_TREE_SCENARIO_ID
+    response.headers["X-Browser-Safe-Variant"] = variant
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/browser-safe/iframe-frame-tree/frame")
+def browser_safe_iframe_frame_tree_frame() -> Response:
+    """Return a deterministic local-only iframe/frame-tree child frame."""
+    variant = iframe_frame_tree_variant(request.args.get("variant"))
+    frame_id = str(request.args.get("frame_id") or variant).strip()[:80]
+    try:
+        depth = int(str(request.args.get("depth") or "1"))
+    except ValueError:
+        depth = 1
+    depth = max(1, min(depth, 3))
+    html = iframe_frame_tree_frame_html(variant, frame_id, depth)
+    response = Response(html, mimetype="text/html")
+    response.headers["X-Browser-Safe-Lab"] = IFRAME_FRAME_TREE_LAB_ID
+    response.headers["X-Browser-Safe-Scenario"] = IFRAME_FRAME_TREE_SCENARIO_ID
+    response.headers["X-Browser-Safe-Variant"] = variant
+    response.headers["X-Browser-Safe-Frame-Id"] = frame_id
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.get("/api/project/defaults")

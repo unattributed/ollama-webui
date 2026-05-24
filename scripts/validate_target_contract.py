@@ -30,6 +30,7 @@ REQUIRED_SCENARIOS = {
     "chat.basic_prompt",
     "browser.redirect_chain",
     "browser.dom_render_mismatch",
+    "browser.iframe_frame_tree",
     "file_upload.text_context",
     "project_agent.guardrail_context",
     "project_agent.search",
@@ -130,6 +131,7 @@ def validate_scenario(scenario: Any, index: int) -> str:
     guided_lab_requirements = {
         "browser.redirect_chain": "guided.redirect_chain_evidence",
         "browser.dom_render_mismatch": "guided.dom_render_mismatch",
+        "browser.iframe_frame_tree": "guided.iframe_frame_tree_evidence",
     }
     expected_guided_lab = guided_lab_requirements.get(scenario_id)
     if expected_guided_lab is not None:
@@ -168,6 +170,27 @@ def validate_scenario(scenario: Any, index: int) -> str:
         if missing_artifacts:
             fail(
                 f"{scenario_id}.expected_artifacts missing required DOM/render artifacts: "
+                f"{', '.join(sorted(missing_artifacts))}"
+            )
+
+    if scenario_id == "browser.iframe_frame_tree":
+        expected_artifacts = set(item.get("expected_artifacts", []))
+        required_artifacts = {
+            "frame_tree_json",
+            "frame_url_list",
+            "top_page_dom_snapshot_html",
+            "frame_dom_snapshots",
+            "sandbox_findings_json",
+            "srcdoc_findings_json",
+            "cross_frame_rendered_text",
+            "model_bound_context",
+            "model_response_json",
+            "artifact_manifest",
+        }
+        missing_artifacts = required_artifacts - expected_artifacts
+        if missing_artifacts:
+            fail(
+                f"{scenario_id}.expected_artifacts missing required iframe/frame-tree artifacts: "
                 f"{', '.join(sorted(missing_artifacts))}"
             )
 

@@ -47,6 +47,7 @@ Out of scope:
 | `chat.basic_prompt` | Chat form | `/api/generate` | `browser_chat_generation` |
 | `browser.redirect_chain` | Browser-Safe redirect-chain lab pages | `/browser-safe/redirect/start` | `redirect_chain_context` |
 | `browser.dom_render_mismatch` | Browser-Safe DOM/render mismatch lab page | `/browser-safe/dom-render-mismatch` | `dom_render_mismatch_context` |
+| `browser.iframe_frame_tree` | Browser-Safe iframe/frame-tree lab pages | `/browser-safe/iframe-frame-tree` | `iframe_frame_tree_context` |
 | `file_upload.text_context` | Uploaded file analysis | Browser local file reader | `uploaded_text_context` |
 | `project_agent.guardrail_context` | Project Agent guardrails | `/api/project/context` | `project_document_context` |
 | `project_agent.search` | Project Agent search | `/api/project/search` | `project_search_context` |
@@ -133,6 +134,49 @@ implementation_status: target-ready
 
 The `target-ready` status means the vulnerable app exposes the local target behavior and the toolkit may implement browser-rendering evidence capture in a separate branch. It does not mean the toolkit lab is already implemented.
 
+## Iframe/frame-tree local lab surface
+
+The iframe/frame-tree lab surface is intentionally local and deterministic. It is used to teach and validate how browser-based AI systems observe same-origin frames, sandboxed frames, srcdoc frames, and nested browsing contexts.
+
+Entry point:
+
+```text
+/browser-safe/iframe-frame-tree
+```
+
+Metadata endpoint:
+
+```text
+/api/browser-safe/iframe-frame-tree/scenarios
+```
+
+Supported safe variants:
+
+```text
+baseline
+sandboxed_frame
+srcdoc_hidden_context
+nested_frame_chain
+```
+
+Example local checks with free and open-source tooling:
+
+```bash
+curl -s http://127.0.0.1:11435/api/browser-safe/iframe-frame-tree/scenarios | python -m json.tool
+curl -s http://127.0.0.1:11435/browser-safe/iframe-frame-tree?variant=nested_frame_chain
+```
+
+The surface does not load external scripts, images, fonts, frames, or trackers. It is designed for Playwright-based or purpose-built Python browser evidence capture in the toolkit. Static HTML parsing alone is not sufficient for senior-quality iframe/frame-tree testing because the lab is about the browser-created frame tree, srcdoc handling, sandbox attributes, frame URLs, nested browsing contexts, and cross-frame rendered text.
+
+Toolkit mapping:
+
+```text
+guided_lab_id: guided.iframe_frame_tree_evidence
+implementation_status: target-ready
+```
+
+The `target-ready` status means the vulnerable app exposes the local target behavior and the toolkit may implement browser-rendering frame-tree evidence capture in a separate branch. It does not mean the toolkit lab is already implemented.
+
 ## Traceability rules
 
 1. Every toolkit test that targets `ollama-webui` should reference one scenario id from the JSON contract.
@@ -152,3 +196,4 @@ python scripts/validate_target_contract.py
 The validator confirms that the contract has required top-level fields, active scenarios, scenario ids, safety boundaries, expected artifacts, article mappings, and no duplicate scenario ids.
 
 The DOM/render mismatch target explicitly requires browser rendering evidence capture. A valid toolkit implementation must compare raw DOM state, browser-rendered visible text, computed style findings, and screenshot evidence. Static HTML parsing alone is not sufficient for this scenario.
+The iframe/frame-tree target explicitly requires browser rendering and frame-tree observation. A valid toolkit implementation must capture the frame tree, frame URLs, top-page DOM snapshot, frame DOM snapshots, sandbox findings, srcdoc findings, cross-frame rendered text, model-bound context, model response, artifact manifest, evidence records, and analyst-readable report. Static HTML parsing alone is not sufficient for this scenario.
