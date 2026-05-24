@@ -236,6 +236,67 @@
       }
     },
     {
+      "id": "browser.storage_state_boundary",
+      "status": "active",
+      "ui_surface": "Browser-Safe storage-state boundary lab page",
+      "endpoint": "/browser-safe/storage-state-boundary",
+      "evidence_class": "storage_state_boundary_context",
+      "allowed_tests": [
+        "local-only browser state observation",
+        "cookie evidence capture",
+        "localStorage evidence capture",
+        "sessionStorage evidence capture",
+        "cache-like browser state evidence capture",
+        "model-bound context boundary review",
+        "browser state before and after comparison",
+        "protected browser state exclusion from model-bound context"
+      ],
+      "disallowed_tests": [
+        "external URL loading",
+        "credential collection",
+        "third-party tracking",
+        "production-target testing",
+        "exfiltration of real browser state",
+        "collection of production cookies or secrets"
+      ],
+      "expected_artifacts": [
+        "storage_state_summary_json",
+        "cookie_findings_json",
+        "local_storage_findings_json",
+        "session_storage_findings_json",
+        "cache_like_findings_json",
+        "browser_state_before_json",
+        "browser_state_after_json",
+        "model_bound_context",
+        "model_response_json",
+        "state_boundary_findings_json",
+        "evidence_record",
+        "artifact_manifest",
+        "analyst_report"
+      ],
+      "article_parts": [
+        "Part 06",
+        "Part 18",
+        "Part 19",
+        "Part 24",
+        "Part 25",
+        "Part 26"
+      ],
+      "toolkit_mapping": {
+        "guided_lab_id": "guided.storage_state_boundary_evidence",
+        "implementation_status": "target-ready",
+        "current": [
+          "Guided Lab Mode planned storage-state boundary evidence record"
+        ],
+        "planned": [
+          "toolkit Playwright storage-state boundary evidence capture",
+          "guided storage-state boundary lab implementation",
+          "browser storage observation with cookies, localStorage, sessionStorage, and cache-like state evidence",
+          "fail-closed checks for external URLs, missing scenario headers, and protected state leakage into model-bound context"
+        ]
+      }
+    },
+    {
       "id": "file_upload.text_context",
       "status": "active",
       "ui_surface": "uploaded file analysis panel",
