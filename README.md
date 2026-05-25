@@ -2,7 +2,7 @@
 
 Ollama Web UI is an intentionally insecure local lab application for chatting with models served by Ollama.
 
-This project is not a secure product, not a hardened assistant, and not a production-ready AI coding environment. It has no intentional focus on security. It is deliberately useful as a weak, inspectable browser-based LLM target for the AI Browser Security Test Suite in the same spirit that OWASP Juice Shop is useful as an intentionally vulnerable web application.
+This project is not security-hardened, not a hardened assistant, and not ready for production use. It has no intentional focus on defending real users or real systems. It is deliberately useful as a weak, inspectable browser-based LLM target for the AI Browser Security Test Suite in the same spirit that OWASP Juice Shop is useful as an intentionally vulnerable web application.
 
 Use it only on a machine and projects you control. The Project Agent feature can read local files under configured workspace roots and run allowlisted local development tools. That behavior is dangerous by design if pointed at real sensitive repositories or if exposed beyond localhost.
 
@@ -20,6 +20,37 @@ This application deliberately does not provide production security controls:
 - no safe-by-default authorization model for local file and tool access beyond simple local path and command allowlists
 
 The expected use case is local defensive research, browser-AI testing, and controlled demonstrations by the AI Browser Security Test Suite. Do not bind it to public interfaces, do not use it with production secrets, and do not treat model responses as security decisions.
+
+## Browser-Safe AI Program Role
+
+The Browser-Safe AI Systems Program uses three coordinated assets:
+
+```text
+ollama-webui:
+  intentionally weak local browser-based AI lab target
+
+ai-browser-security-test-suite:
+  evidence capture, validation, reviewer, and artifact tooling
+
+Browser-Safe AI Systems series:
+  methodology, lab narrative, and practitioner training path
+```
+
+The purpose of this repository is to expose deterministic weak browser-AI behavior that can be inspected safely on localhost. The purpose is not to make the application secure, production-ready, or suitable for real sensitive workflows.
+
+Safety boundaries in this repository protect scope. They require local-only, synthetic-only, authorized-only lab use. Those boundaries must not remove the observable weak behavior that a scenario exists to teach. A scenario that blocks or hides the weak behavior is a broken lab scenario, even if it appears safer.
+
+Each Browser-Safe AI scenario must preserve both of these properties:
+
+```text
+one weak browser-AI behavior:
+  the local synthetic behavior that participants are expected to observe, capture, and review
+
+one safety boundary:
+  the local-only, synthetic-only, authorized-only constraint that keeps the lesson bounded
+```
+
+The scenario contract documents the allowed tests, out-of-scope tests, and expected evidence artifacts. It does not harden the target and it does not convert model output into a security decision.
 
 ## Features
 
