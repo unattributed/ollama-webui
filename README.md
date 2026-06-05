@@ -79,7 +79,7 @@ The scenario contract documents the allowed tests, out-of-scope tests, and expec
 From the project directory:
 
 ```bash
-cd /home/foo/Workspace/ollama-webui
+cd "$HOME/Workspace/ollama-webui"
 ```
 
 Use the existing virtual environment when it already exists:
@@ -125,7 +125,7 @@ ollama serve
 Run the Flask helper from the project root:
 
 ```bash
-cd /home/foo/Workspace/ollama-webui
+cd "$HOME/Workspace/ollama-webui"
 source .venv/bin/activate
 python scripts/pull_model.py
 ```
@@ -200,7 +200,7 @@ model.catalog_filter
 Validate the contract before treating it as a toolkit target source:
 
 ```bash
-cd /home/foo/Workspace/ollama-webui
+cd "$HOME/Workspace/ollama-webui"
 python scripts/validate_target_contract.py
 ```
 
@@ -234,7 +234,7 @@ The target uses synthetic values only. It does not load external URLs, collect c
 Validate the target surface before implementing toolkit evidence capture:
 
 ```bash
-cd /home/foo/Workspace/ollama-webui
+cd "$HOME/Workspace/ollama-webui"
 python scripts/validate_target_contract.py
 python scripts/validate_storage_state_boundary_target.py
 ```
@@ -242,7 +242,7 @@ python scripts/validate_storage_state_boundary_target.py
 
 ## Project Agent
 
-Use the Project Agent panel to give Ollama bounded local project context before asking for coding help. The default project is `/home/foo/Workspace/OSMAP` when it exists.
+Use the Project Agent panel to give Ollama bounded local project context before asking for coding help. The default project is `$HOME/Workspace/OSMAP` when it exists, which resolves to `/home/foo/Workspace/OSMAP` on the prepared workshop VM.
 
 This is a lab feature, not a secure coding agent. Treat every project file,
 tool result, and generated answer as untrusted. The feature exists so the test

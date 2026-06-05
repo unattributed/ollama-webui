@@ -245,7 +245,7 @@ The `target-ready` status means the vulnerable app exposes the local target beha
 Run:
 
 ```bash
-cd /home/foo/Workspace/ollama-webui
+cd "$HOME/Workspace/ollama-webui"
 python scripts/validate_target_contract.py
 ```
 
